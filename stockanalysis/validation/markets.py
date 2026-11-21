@@ -99,12 +99,22 @@ def app_positions(frames: dict[str, pd.DataFrame], index: pd.DatetimeIndex) -> p
     return pd.DataFrame(out).reindex(index).fillna(False).astype(bool)
 
 
-def faber_positions(close: pd.DataFrame) -> pd.DataFrame:
-    """Hold while the month-end close is above the 10-month (210-day) average."""
+def faber_positions(close: pd.DataFrame, band: float = 0.0) -> pd.DataFrame:
+    """Hold while the month-end close is above the 10-month (210-day) average.
+
+    With `band` (e.g. 0.02), buy only on a month-end close more than 2% above
+    the average and sell only on one more than 2% below; in between, keep the
+    current position. That skips many whipsaws (docs/ENTRIES.md).
+    """
     ma = close.rolling(210, min_periods=210).mean()
     month_end = pd.Series(close.index.to_period("M"), index=close.index)
     is_end = month_end.ne(month_end.shift(-1))
     is_end.iloc[-1] = False   # the latest day is not a month end until the month is over
+    if band:
+        ends = pd.DataFrame({c: is_end for c in close.columns}, index=close.index)
+        enter = ((close > ma * (1 + band)) & ma.notna()).where(ends)
+        leave = ((close < ma * (1 - band)) & ma.notna()).where(ends)
+        return T._enter_exit(enter, leave)
     signal = (close > ma).where(ma.notna(), False)
     held = signal.where(is_end).ffill().fillna(False).astype(bool)
     return held

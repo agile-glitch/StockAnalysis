@@ -133,12 +133,23 @@ class Engine:
                           position=position, peak_close=peak_close)
 
         market = self.market
+        entry_check = None
+        if decision["action"] in ("buy", "strong_buy") and not position:
+            vol, avg = float(last.get("volume") or 0), float(last.get("vol_avg50") or 0)
+            if avg > 0:
+                ratio = vol / avg
+                entry_check = {"volume_ratio": round(ratio, 2), "volume_confirmed": ratio > 1.0}
+                if ratio <= 1.0:
+                    plan["notes"].append(
+                        f"Volume was below its 50-day average today ({ratio:.0%} of normal). In testing on stocks "
+                        "the rules were never tuned on, Buy signals on above-average volume lost less often (69% "
+                        "vs 73% of trades) and earned a little more, so consider waiting for a stronger-volume day.")
         if market and decision["action"] in ("buy", "strong_buy") and not position:
             if not market["risk_on"]:
                 plan["notes"].append(
-                    "The overall market is in a downtrend. In the historical test, stepping aside in market "
-                    "downtrends reduced crash losses (though it missed some fast rebounds); consider waiting "
-                    "or buying a smaller position.")
+                    "The overall market is in a downtrend, so the market risk indicator suggests holding less in "
+                    "stocks overall; if you buy, consider a smaller position. Skipping every Buy during downtrends "
+                    "did not help in testing: it also skipped stocks rising against the market, like energy in 2022.")
             elif market["exposure_pct"] < 90:
                 plan["notes"].append(
                     f"The market is turbulent: the market risk indicator suggests keeping about "
@@ -176,6 +187,7 @@ class Engine:
             "signals": [s.to_dict() for s in signals],
             "events": events,
             "plan": plan,
+            "entry_check": entry_check,
             "options": option_ideas,
             "news": news,
             "sentiment": news_summary,
@@ -245,11 +257,18 @@ class Engine:
         prev_action = prev.get("action") if prev else None
         if cur["action"] != prev_action and (prev_action or cur["action"] != "hold"):
             was = f" (was {strategies.ACTION_LABELS[prev_action]})" if prev_action else ""
+            check = cur.get("entry_check") or {}
+            volume = ""
+            if check and cur["direction"] == "bullish":
+                volume = ("Volume confirmed (above its 50-day average)." if check.get("volume_confirmed") else
+                          "Volume was below average: in testing, waiting for an above-average-volume day cut "
+                          "losing entries.")
             body = " ".join(filter(None, [
                 f"Score {cur['score']:+.0f}.",
                 ("Why: " + "; ".join(cur["reasons"]) + ".") if cur["reasons"] else "",
                 cur.get("gate_note") or "",
                 self._plan_line(cur),
+                volume,
             ]))
             push("signal", cur["direction"], f"{cur['action_label']}{was}", body, f"action:{cur['action']}:{day}")
 

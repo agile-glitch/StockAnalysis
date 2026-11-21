@@ -1301,6 +1301,15 @@ function marketsPage(root) {
     } });
     const pending = p.assets.filter((a) => a.signal && a.signal.flip_pending);
     const changes = p.changes.slice(0, 8);
+    const band = trend.band_pct || 0;
+    const bandSelect = h("select.input", { style: "width:auto", "aria-label": "Trend rule band", onchange: async (e) => {
+      try {
+        await api("/api/settings", { method: "PUT", body: { trend_band_pct: Number(e.target.value) } });
+        [markets, trend] = await Promise.all([api("/api/markets"), api("/api/trend")]);
+        render();
+      } catch (err) { toast({ title: "Could not change the band", body: err.message, tone: "warning" }); }
+    } }, [[0, "No band (original rule)"], [1, "1% band"], [2, "2% band (tested, default)"], [3, "3% band"]].map(([v, label]) =>
+      h("option", { value: v, selected: Number(band) === v }, label)));
     return h("section.card",
       h("div.card-head", h("h2", "Your trend portfolio"), h("p", "The 8-asset 10-month rule, sized to your " + fmt.money0(p.budget) + " budget")),
       h("div.row", { style: "justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px" },
@@ -1312,6 +1321,10 @@ function marketsPage(root) {
         { label: "Rule says", cell: (a) => (!a.signal ? h("span.muted.small", "No data") : h("div",
             a.signal.holding ? pill("bullish", "Hold") : pill("bearish", "Cash"),
             h("div.small", { style: "margin-top:3px" }, h("span." + signClass(a.signal.gap_pct), fmt.pct(a.signal.gap_pct, 1)), h("span.muted", " vs average")))) },
+        { label: band ? "Buy above / sell below" : "Average", right: true, hideSmall: true, cell: (a) => (!a.signal ? "—" : band
+            ? h("div.small", h("div", (a.signal.holding ? h("span.muted", fmt.num(a.signal.buy_level, 2)) : h("strong", fmt.num(a.signal.buy_level, 2)))),
+                h("div", a.signal.holding ? h("strong", fmt.num(a.signal.sell_level, 2)) : h("span.muted", fmt.num(a.signal.sell_level, 2))))
+            : fmt.num(a.signal.average, 2)) },
         { label: "Amount", right: true, cell: (a) => (a.amount ? fmt.money0(a.amount) : h("span.muted", "$0")) },
         { label: "Since", right: true, hideSmall: true, cell: (a) => (a.signal ? fmt.date(a.signal.since) : "—") },
         { label: "At month end", hideSmall: true, cell: (a) => (!a.signal ? "" : a.signal.flip_pending
@@ -1319,7 +1332,11 @@ function marketsPage(root) {
             : h("span.muted.small", "No change")) },
       ], p.assets),
       h("p.small", { style: "margin-top:8px" }, h("strong", "Next check: "), "after the close on " + fmt.date(p.next_check) +
-        " (the month's last trading day). " + (pending.length ? pending.length + " asset" + (pending.length > 1 ? "s are" : " is") + " on the other side of the average right now, so a change is possible." : "No asset is near a change right now.")),
+        " (the month's last trading day). " + (pending.length ? pending.length + " asset" + (pending.length > 1 ? "s are" : " is") + " past " + (band ? "a buy or sell level" : "the average") + " right now, so a change is possible." : "No asset is past " + (band ? "a buy or sell level" : "the average") + " right now.")),
+      h("div.row", { style: "margin-top:8px;gap:8px" }, h("span.small", h("strong", "Whipsaw band: ")), bandSelect),
+      h("p.small.soft", { style: "margin-top:4px" }, band
+        ? "Buys only when a month ends more than " + band + "% above the 10-month average and sells only when one ends more than " + band + "% below; in between it keeps what it has. On 2016–2026 data the 2% band was not chosen on, it halved the trades and cut losing trades from 62% to 45%, with about the same return."
+        : "Original rule: buys on any month-end close above the average and sells on any close below, which trades about twice as often and loses on more trades."),
       changes.length ? h("div", { style: "margin-top:10px" }, h("h3.small", "Recent changes"),
         h("ul.small.soft", { style: "margin:4px 0 0;padding-left:18px" }, changes.map((c) => h("li", fmt.date(c.date) + ": ",
           c.bought.length ? h("span.up", "bought " + c.bought.join(", ")) : null, c.bought.length && c.sold.length ? "; " : null,
@@ -1353,7 +1370,7 @@ function marketsPage(root) {
       trend ? h("p.small.soft", "🔔 = you get an alert (in the app, and on your phone if push is set up) when that market's 10-month rule changes, on the first scan after a month's last close. " +
         (trend.alerts.using_default ? "Turned on by default for the markets where most trend rules beat holding in testing." : ""),
         trend.alerts.using_default ? null : h("button.btn.ghost.small", { onclick: () => setAlerts(null) }, "Reset to the tested trend-friendly markets")) : null,
-      h("p.muted.small", "Trend (10-month rule): hold while the last month-end close is above its 10-month average, otherwise cash. “What testing found” counts how many of four trend rules (10-month average, 200-day average, 50/200 crossover, 55-day breakout) beat holding that market on a risk-adjusted basis over its whole history, with costs. With several rules per market some will win by luck, so agreement matters more than any single winner. Futures prices (=F) ignore the cost of rolling contracts."));
+      h("p.muted.small", "Trend (10-month rule): hold while the last month-end close is above its 10-month average, otherwise cash" + (data.band_pct ? " (with your " + data.band_pct + "% whipsaw band: buy only that far above the average, sell only that far below)" : "") + ". “What testing found” counts how many of four trend rules (10-month average, 200-day average, 50/200 crossover, 55-day breakout) beat holding that market on a risk-adjusted basis over its whole history, with costs. With several rules per market some will win by luck, so agreement matters more than any single winner. Futures prices (=F) ignore the cost of rolling contracts."));
   }
 
   function detailTable(data) {
@@ -1628,6 +1645,7 @@ function trackRecordPage(root) {
   let experiments = null;
   let scorecard = null;
   let scoreKey = null;
+  let entries = null;
   const body = h("div.stack");
   fill(root, pageHead("Track record", "The rules replayed day by day on 20+ years of past prices, then checked against what happened next, on stocks and years they were not tuned on."), body);
 
@@ -1746,8 +1764,38 @@ function trackRecordPage(root) {
         h("li", "Past results do not guarantee future ones, and markets change once rules become popular.")),
       h("p.muted.small", { style: "margin-top:8px" }, "Run on " + new Date(r.generated).toLocaleString() + ". Rerun with: python -m stockanalysis.validation"));
 
-    fill(body, scorecard ? scorecardCard(scorecard) : null, ...storyCards(r), experiments ? experimentsCard(experiments) : null, stops ? stopsCard(stops) : null, h("h2", { style: "margin-top:12px;font-size:18px" }, "Round 1 in detail: the app's own Buy and Sell rules"),
+    fill(body, scorecard ? scorecardCard(scorecard) : null, entries ? entriesCard(entries) : null, ...storyCards(r), experiments ? experimentsCard(experiments) : null, stops ? stopsCard(stops) : null, h("h2", { style: "margin-top:12px;font-size:18px" }, "Round 1 in detail: the app's own Buy and Sell rules"),
       h("div.row", rulesChips), summary, h("div.row", cellChips), portfolioCard, signalCard, yearCard, searchCard, caveats);
+  }
+
+  function entriesCard(en) {
+    const part = (p, title, selLabel, testLabel) => {
+      const rows = Object.entries(p.variants);
+      const v = p.test_verdict;
+      const status = (k) => (k === "base" ? h("span.tag", "Now") : k === p.pick ? h("span.tag", { style: "background:var(--accent);color:var(--on-accent)" }, "Picked")
+        : p.kept.includes(k) ? h("span.tag", "Kept") : h("span.muted.small", "Dropped"));
+      return h("div", { style: "margin-top:12px" }, h("h3", title),
+        dataTable([
+          { label: "Entry filter", cell: ([k, x]) => h("div", h("div", x.label), x.filters ? h("div.small.muted", x.filters.join(" + ")) : null) },
+          { label: "", cell: ([k]) => status(k) },
+          { label: selLabel + ": losing trades", right: true, hideSmall: true, cell: ([, x]) => x.selection.losing_pct + "%" },
+          { label: testLabel + ": losing trades", right: true, cell: ([, x]) => h("strong", x.test.losing_pct + "%") },
+          { label: "Trades", right: true, hideSmall: true, cell: ([, x]) => fmt.num(x.test.trades) },
+          { label: "Yearly return", right: true, cell: ([, x]) => fmt.pct(x.test.basket_cagr_pct, 1) },
+          { label: "Sharpe", right: true, hideSmall: true, cell: ([, x]) => (x.test.basket_sharpe ?? 0).toFixed(2) },
+        ], rows),
+        v ? h("p.small", { style: "margin-top:6px" }, h("strong", "Picked before testing: "), p.variants[p.pick].label + ". On data it never saw, losing trades went from " +
+          v.losing_pct[0] + "% to " + v.losing_pct[1] + "%, yearly return " + fmt.pct(v.cagr_pct[0], 1) + " → " + fmt.pct(v.cagr_pct[1], 1) + ", Sharpe " + v.sharpe[0] + " → " + v.sharpe[1] + ". " +
+          (v.held_up ? "It held up." : "Fewer losing trades, but it did not keep the profits, so it is not used as a rule.")) : null);
+    };
+    return h("section.card",
+      h("div.card-head", h("h2", "Cutting losing entries"), h("p", "Entry filters that delay or skip buys; exits unchanged")),
+      h("div.note", { style: "display:block" }, h("strong", "What worked: a 2% band on the 10-month trend rule. "),
+        "Buying only when a month ends more than 2% above the average (and selling only 2% below) cut losing trades and halved the number of trades with about the same return, on years it was not chosen on. It is now the default for market trend alerts and the trend portfolio (changeable on the Markets page). " +
+        "For stocks, no combination helped: filters cut losers but cut winners too. Volume confirmation alone did best, so Buy alerts now say whether volume confirmed the signal."),
+      part(en.trend, "Trend-rule entries (" + en.trend.markets.length + " funds)", "2003–2015", "2016–today"),
+      part(en.stocks, "Stock Buy entries", "Training stocks 2003–2014", en.stocks.test_stocks + " other stocks 2015–today"),
+      h("p.muted.small", { style: "margin-top:8px" }, "Most losing stock trades come from the exit, not the entry: the trailing stop (3× the average daily range) closes many trades early for small losses, and a minority of long trends pays for them. Full tables: docs/ENTRIES.md."));
   }
 
   function scoreSummary(methods) {
@@ -1965,8 +2013,8 @@ function trackRecordPage(root) {
   }
 
   Promise.all([api("/api/validation"), api("/api/validation/stops").catch(() => null), api("/api/validation/experiments").catch(() => null),
-    api("/api/validation/scorecard").catch(() => null)])
-    .then(([r, st, ex, sc]) => { report = r; stops = st; experiments = ex; scorecard = sc; render(); })
+    api("/api/validation/scorecard").catch(() => null), api("/api/validation/entries").catch(() => null)])
+    .then(([r, st, ex, sc, en]) => { report = r; stops = st; experiments = ex; scorecard = sc; entries = en; render(); })
     .catch((e) => fill(body, h("section.card", h("div.empty", e.message))));
   return {};
 }

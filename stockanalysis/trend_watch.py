@@ -55,12 +55,20 @@ def _month_ends(index: pd.DatetimeIndex) -> pd.Series:
     return ends
 
 
-def signal(df: pd.DataFrame) -> tuple[dict, pd.Series] | None:
-    """Current 10-month-rule state of one market, plus its daily held series."""
+def band_of(settings: dict) -> float:
+    return float(settings.get("trend_band_pct") or 0.0) / 100.0
+
+
+def signal(df: pd.DataFrame, band: float = 0.0) -> tuple[dict, pd.Series] | None:
+    """Current 10-month-rule state of one market, plus its daily held series.
+
+    `band` (e.g. 0.02): buy only on a month-end close that far above the
+    average, sell only on one that far below.
+    """
     close = df["close"].dropna()
     if len(close) < 212:
         return None
-    held = faber_positions(close.to_frame("c"))["c"]
+    held = faber_positions(close.to_frame("c"), band)["c"]
     ma = close.rolling(210).mean()
     ends = _month_ends(close.index)
     end_days = close.index[ends.values & ma.notna().values]
@@ -72,7 +80,7 @@ def signal(df: pd.DataFrame) -> tuple[dict, pd.Series] | None:
     since = held.index[flips.values][-1].date().isoformat() if flips.any() else None
     price, avg = float(close.iloc[-1]), float(ma.iloc[-1])
     holding = bool(held.iloc[-1])
-    above_now = price > avg
+    buy_level, sell_level = avg * (1 + band), avg * (1 - band)
     return {
         "holding": holding,
         "decided_on": decided.date().isoformat(),
@@ -82,8 +90,11 @@ def signal(df: pd.DataFrame) -> tuple[dict, pd.Series] | None:
         "price": round(price, 4),
         "average": round(avg, 4),
         "gap_pct": round((price / avg - 1) * 100, 2),
+        "band_pct": round(band * 100, 2),
+        "buy_level": round(buy_level, 4),
+        "sell_level": round(sell_level, 4),
         # If the month ended today, would the rule change its mind?
-        "flip_pending": above_now != holding,
+        "flip_pending": (price < sell_level) if holding else (price > buy_level),
         "as_of": close.index[-1].date().isoformat(),
     }, held
 
@@ -121,10 +132,10 @@ class TrendWatch:
         self._today_fn = today_fn or date.today
 
     # ------------------------------------------------------------------
-    def _signals(self, symbols: list[str]) -> tuple[dict, dict]:
+    def _signals(self, symbols: list[str], band: float = 0.0) -> tuple[dict, dict]:
         def load(sym):
             try:
-                return signal(self.provider.history(sym, PERIOD))
+                return signal(self.provider.history(sym, PERIOD), band)
             except Exception as exc:
                 log.warning("Trend data unavailable for %s: %s", sym, exc)
                 return None
@@ -138,7 +149,8 @@ class TrendWatch:
         settings = self.db.get_settings()
         watched = alert_symbols(settings)
         symbols = list(dict.fromkeys([*watched, *FABER]))
-        signals, helds = self._signals(symbols)
+        band = band_of(settings)
+        signals, helds = self._signals(symbols, band)
         budget = float(settings["budget"])
         slot = budget / len(FABER)
         assets = []
@@ -156,6 +168,7 @@ class TrendWatch:
                 "signals": {s: signals.get(s) for s in watched},
                 "names": {s: name_of(s) for s in watched},
             },
+            "band_pct": round(band * 100, 2),
             "portfolio": {
                 "alerts_on": bool(settings["trend_portfolio_alerts"]),
                 "complete": complete,
@@ -198,14 +211,17 @@ class TrendWatch:
         name = name_of(sym)
         month = pd.Timestamp(sig["decided_on"]).strftime("%B")
         close, avg = sig["decided_close"], sig["decided_average"]
+        band = sig.get("band_pct") or 0
+        margin = f" by more than {band:g}%" if band else ""
         if sig["holding"]:
             title, tone = f"{name} turned up: 10-month rule says hold", "bullish"
-            what = (f"{name} ({sym}) closed {month} at {close:,.2f}, above its 10-month average of {avg:,.2f}. "
+            what = (f"{name} ({sym}) closed {month} at {close:,.2f}, above its 10-month average of {avg:,.2f}{margin}. "
                     "The 10-month rule moves back in.")
         else:
             title, tone = f"{name} turned down: 10-month rule says cash", "bearish"
-            what = (f"{name} ({sym}) closed {month} at {close:,.2f}, below its 10-month average of {avg:,.2f}. "
-                    "The 10-month rule steps aside until a month ends back above it.")
+            what = (f"{name} ({sym}) closed {month} at {close:,.2f}, below its 10-month average of {avg:,.2f}{margin}. "
+                    "The 10-month rule steps aside until a month ends back above it"
+                    + (f" by more than {band:g}%." if band else "."))
         row = next((r for r in (load_report() or {}).get("markets", []) if r["symbol"] == sym), None)
         tested = _tested(row)
         note = (f" In testing, {tested['trend_wins']} of 4 trend rules beat simply holding {name.lower()}."

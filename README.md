@@ -103,12 +103,24 @@ record page): every method the app recommends, on past prices with costs.
 | --- | --- | --- | --- | --- |
 | Stock Buy/Sell signals (unseen stocks) | 2006–2026 | +9.6% | −45% | holding them: +12.1%, −55% |
 | Market risk switch | 1994–2026 | +9.1% | −21% | S&P 500: +10.4%, −55% |
-| Trend portfolio (8 assets) | 2006–2026 | +4.7% | −15% | 60/40: +8.0%, −31% |
-| Market trend alerts (picked on data to 2015) | 2016–2026 | +5.5% | −16% | holding them: +5.1%, −34% |
+| Trend portfolio (8 assets, 2% band) | 2006–2026 | +5.1% | −12% | 60/40: +8.0%, −31% |
+| Market trend alerts (picked on data to 2015, 2% band) | 2016–2026 | +5.8% | −16% | holding them: +5.1%, −34% |
 
 All four made money and beat T-bills; only the market trend alerts made more
 than their comparison, and by a small margin. The real gain is smaller worst
 drops. Rerun with `python -m stockanalysis.validation.scorecard`.
+
+**Cutting losing entries** ([docs/ENTRIES.md](docs/ENTRIES.md)): entry
+filters were chosen on early data and then tested on later years and other
+stocks. A **2% band** on the 10-month trend rule (buy only on a month-end
+close more than 2% above the average, sell only 2% below) cut losing trades
+from 63% to 55% across 23 funds in 2016–2026 and halved the number of trades,
+with the same return. It is now the default for market trend alerts and the
+trend portfolio (change it on the Markets page). For stocks, the combined
+filters cut losing trades (73% to 68%) but also cut the return, so the Buy
+rule is unchanged; Buy alerts now say whether volume confirmed the signal,
+the single filter that did best. Rerun with
+`python -m stockanalysis.validation.entries`.
 
 To rerun the test (downloads about 190 price histories the first time):
 

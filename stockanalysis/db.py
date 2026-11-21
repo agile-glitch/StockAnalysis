@@ -36,6 +36,9 @@ DEFAULT_SETTINGS = {
     "trend_alert_symbols": None,
     # Month-end alerts when the 8-asset trend portfolio changes what it holds
     "trend_portfolio_alerts": True,
+    # 10-month rule band: buy only this % above the average, sell only this % below
+    # (0 = the original rule). 2% halved trades and losing entries in testing.
+    "trend_band_pct": 2.0,
 }
 
 TEXT_SETTINGS = {"sec_contact": 200, "push_url": 500, "tv_webhook_token": 100}
@@ -52,6 +55,7 @@ SETTING_LIMITS = {
     "insider_poll_minutes": (1, 60),
     "insider_sell_min_value": (0, 1e12),
     "insider_market_min_value": (0, 1e12),
+    "trend_band_pct": (0.0, 5.0),
 }
 INT_SETTINGS = {"refresh_minutes", "insider_poll_minutes"}
 

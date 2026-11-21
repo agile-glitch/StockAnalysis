@@ -385,6 +385,17 @@ def create_app(db: Database | None = None, provider: CachedProvider | None = Non
             raise HTTPException(404, "No scorecard yet. Run: python -m stockanalysis.validation.scorecard")
         return FileResponse(path, media_type="application/json", headers={"Cache-Control": "no-cache"})
 
+    @app.get("/api/validation/entries")
+    def validation_entries():
+        from .validation.entries import BUNDLED as EN_BUNDLED
+        from .validation.run import REPORT_DIR
+        path = REPORT_DIR / "entries.json"
+        if not path.exists():
+            path = EN_BUNDLED
+        if not path.exists():
+            raise HTTPException(404, "No entry test yet. Run: python -m stockanalysis.validation.entries")
+        return FileResponse(path, media_type="application/json", headers={"Cache-Control": "no-cache"})
+
     @app.get("/api/validation/stops")
     def validation_stops():
         from .validation.run import REPORT_DIR

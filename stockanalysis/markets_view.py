@@ -30,16 +30,16 @@ def load_report() -> dict | None:
     return None
 
 
-def _live(provider, symbol: str) -> dict:
+def _live(provider, symbol: str, band: float = 0.0) -> dict:
     try:
-        df = provider.history(symbol, "2y")
+        df = provider.history(symbol, "5y")   # same history as trend alerts, so the banded rule agrees
     except Exception as exc:
         return {"error": str(exc)}
     close = df["close"].dropna()
     if len(close) < 2:
         return {"error": "Not enough data"}
     sma200 = close.rolling(200).mean().iloc[-1]
-    held = faber_positions(close.to_frame())["close"]
+    held = faber_positions(close.to_frame(), band)["close"]
     step = max(1, len(close.iloc[-250:]) // 60)
     return {
         "price": round(float(close.iloc[-1]), 4),
@@ -81,13 +81,14 @@ def _tested(row: dict | None) -> dict | None:
 
 
 def overview(provider, engine=None) -> dict:
+    band = (engine.db.get_settings().get("trend_band_pct") or 0.0) / 100.0 if engine else 0.0
     with _lock:
-        if _cache["data"] and time.time() - _cache["at"] < CACHE_SECONDS:
+        if _cache["data"] and time.time() - _cache["at"] < CACHE_SECONDS and _cache.get("band") == band:
             return _cache["data"]
     report = load_report() or {}
     rows = {r["symbol"]: r for r in report.get("markets", [])}
     with ThreadPoolExecutor(max_workers=6) as pool:
-        live = dict(zip([m[0] for m in MARKETS], pool.map(lambda m: _live(provider, m[0]), MARKETS)))
+        live = dict(zip([m[0] for m in MARKETS], pool.map(lambda m: _live(provider, m[0], band), MARKETS)))
     markets = [{"symbol": sym, "name": name, "class": cls, "live": live[sym], "tested": _tested(rows.get(sym))}
                for sym, name, cls in MARKETS]
     faber = report.get("faber")
@@ -101,8 +102,8 @@ def overview(provider, engine=None) -> dict:
                                                          "top_quintile_edge_B", "bottom_quintile_edge_B",
                                                          "edge_B_by_volatility_A", "best_in_A", "traits")}
                                  for k, v in persistence["rules"].items()}}
-    data = {"markets": markets, "faber": faber, "persistence": persistence, "rules": RULES,
+    data = {"markets": markets, "faber": faber, "persistence": persistence, "rules": RULES, "band_pct": band * 100,
             "tested_available": bool(rows)}
     with _lock:
-        _cache.update(at=time.time(), data=data)
+        _cache.update(at=time.time(), data=data, band=band)
     return data

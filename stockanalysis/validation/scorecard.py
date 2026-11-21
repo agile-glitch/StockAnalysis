@@ -12,7 +12,7 @@ not tuned or chosen on wherever possible:
    200-day average or beating T-bills over 12 months, scaled down when
    turbulent (15% volatility target), else T-bills. 1994-today.
 3. Trend portfolio (Markets page): Faber's 10-month rule on 8 asset classes,
-   the published rule unchanged, 2007-today.
+   with the app's default 2% band (chosen on 2003-2015 data, docs/ENTRIES.md).
 4. Market trend alerts (Markets page): which markets get alerts was picked
    from results on the full history, which flatters them. Here the same
    picking rule (3 or more of 4 trend rules beat holding) is applied using
@@ -51,6 +51,7 @@ PICK_END = "2015-12-31"
 TEST_START = "2016-01-01"
 TREND_RULES = ("faber", "ma200", "cross", "breakout")
 MIN_PICK_YEARS = 7
+BAND = 0.02          # the app's default whipsaw band for the 10-month rule (docs/ENTRIES.md)
 
 
 # --------------------------------------------------------------------------
@@ -172,7 +173,7 @@ def trend_portfolio(prices: dict, tbill: pd.Series) -> tuple[pd.Series, pd.Serie
     close = pd.DataFrame({s: prices[s]["close"] for s in syms}).reindex(base).ffill()
     open_ = pd.DataFrame({s: prices[s]["open"] for s in syms}).reindex(base).ffill()
     cash = pd.Series(_daily_cash_rate(close.index, tbill), index=close.index)
-    held = faber_positions(close)
+    held = faber_positions(close, BAND)
     timed = T.backtest(open_, close, held, cash, COST).loc[start:]
     hold = T.backtest(open_, close, close.notna(), cash, COST).loc[start:]
     sixty = 0.6 * hold["SPY"] + 0.4 * hold["IEF"]
@@ -204,14 +205,16 @@ def trend_alert_test(prices: dict, tbill: pd.Series, today_list: list[str]) -> d
             r = T.backtest(open_, close, held, cash, COST)["close"]
             edge = (_metrics(r.loc[start:PICK_END], cash).get("sharpe") or 0) - (hold_pick.get("sharpe") or 0)
             wins += edge > 0.02
-            if rule == "faber":
-                rule_r[sym], hold_r[sym] = r, h
+        # Picking uses the four standard rules, as on the Markets page; trading uses the app's banded rule.
+        banded = faber_positions(close, BAND)
+        rule_r[sym] = T.backtest(open_, close, banded, cash, COST)["close"]
+        hold_r[sym] = h
         picked = wins >= 3
         if picked:
             picks.append(sym)
         test_rule = _metrics(rule_r[sym].loc[TEST_START:], cash)
         test_hold = _metrics(hold_r[sym].loc[TEST_START:], cash)
-        held = faber_positions(close)["close"].loc[TEST_START:]
+        held = banded["close"].loc[TEST_START:]
         trades = round_trips(rule_r[sym].loc[TEST_START:], held)
         table.append({"symbol": sym, "name": name, "class": cls, "trend_wins_before_2016": int(wins),
                       "picked": picked, "on_today_list": sym in today_list,
@@ -284,9 +287,9 @@ def run() -> dict:
                      extra={"curve": {"strategy": _weekly_curve(r), "comparison": _weekly_curve(hold)}}))
 
     tp, same, sixty, pcash = trend_portfolio(prices, tbill)
-    rows.append(_row("trend_portfolio", "Trend portfolio", "Faber's 10-month rule on 8 asset classes, equal shares; "
-                     "an asset is held only while above its 10-month average at month end.",
-                     f"{tp.index[0].year}–{tp.index[-1].year}", "Yes: the published 2007 rule, unchanged", tp,
+    rows.append(_row("trend_portfolio", "Trend portfolio", "Faber's 10-month rule on 8 asset classes, equal shares, with the app's 2% band: "
+                     "bought after a month-end close 2% above its 10-month average, sold after one 2% below.",
+                     f"{tp.index[0].year}–{tp.index[-1].year}", "Yes: the published 2007 rule; the band was chosen on 2003–2015 data", tp,
                      "60% stocks / 40% bonds", sixty, pcash,
                      note="Also compared with holding the same 8 assets.",
                      extra={"also": {"name": "Holding the same 8", **_metrics(same, pcash)},
@@ -302,7 +305,7 @@ def run() -> dict:
         pr, ph = picked.pop("series")
         rows.append(_row("trend_alerts", "Market trend alerts",
                          f"Markets picked using only data up to {PICK_END[:4]} (3+ of 4 trend rules beat holding), then "
-                         "bought and sold on each 10-month-rule alert, equal shares.",
+                         "bought and sold on each 10-month-rule alert (2% band), equal shares.",
                          f"{TEST_START[:4]}–{pr.index[-1].year}", f"Yes: picked on data up to {PICK_END[:4]}, tested after",
                          pr, "Holding the same markets", ph, cash,
                          note="Picked: " + ", ".join(picked["symbols"]) + ".",
