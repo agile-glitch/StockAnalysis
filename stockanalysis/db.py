@@ -29,9 +29,11 @@ DEFAULT_SETTINGS = {
     "push_scope": "insider",      # "insider" (insider trades only) or "all"
     # Your own indicator alert from the Indicator Lab: {"tactic": key, "params": {...}} or {}
     "my_tactic": {},
+    # Secret in the TradingView webhook URL (generated on first use)
+    "tv_webhook_token": "",
 }
 
-TEXT_SETTINGS = {"sec_contact": 200, "push_url": 500}
+TEXT_SETTINGS = {"sec_contact": 200, "push_url": 500, "tv_webhook_token": 100}
 CHOICE_SETTINGS = {"push_scope": ("insider", "all")}
 BOOL_SETTINGS = {"options_enabled", "insider_alert_sells", "insider_market_alerts"}
 

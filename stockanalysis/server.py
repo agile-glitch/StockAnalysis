@@ -6,7 +6,9 @@ import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+import hmac
+
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
@@ -82,6 +84,19 @@ def create_app(db: Database | None = None, provider: CachedProvider | None = Non
             watcher.stop()
 
     app = FastAPI(title="StockAnalysis", lifespan=lifespan)
+
+    # Requests relayed by a tunnel or proxy (how TradingView reaches a home
+    # computer) come from the internet: let them reach the webhook only, never
+    # your positions, settings or alerts.
+    FORWARD_HEADERS = ("x-forwarded-for", "forwarded", "cf-connecting-ip", "x-real-ip", "true-client-ip")
+
+    @app.middleware("http")
+    async def guard_tunnelled_requests(request: Request, call_next):
+        from fastapi.responses import JSONResponse
+        relayed = any(h in request.headers for h in FORWARD_HEADERS)
+        if relayed and request.url.path != "/api/webhooks/tradingview":
+            return JSONResponse({"detail": "Only the TradingView webhook is reachable from the internet."}, status_code=403)
+        return await call_next(request)
     app.state.engine = engine
     app.state.db = db
     app.state.insiders = insider_service
@@ -240,6 +255,72 @@ def create_app(db: Database | None = None, provider: CachedProvider | None = Non
         if not path.exists():
             raise HTTPException(404, "No track record yet. Run: python -m stockanalysis.validation")
         return FileResponse(path, media_type="application/json", headers={"Cache-Control": "no-cache"})
+
+    # ---------------- TradingView ----------------
+    def tv_token() -> str:
+        token = db.get_settings()["tv_webhook_token"]
+        if not token:
+            from .tradingview import new_token
+            token = db.update_settings({"tv_webhook_token": new_token()})["tv_webhook_token"]
+        return token
+
+    @app.get("/api/tradingview/setup")
+    def tradingview_setup(request: Request):
+        from .tradingview import SUGGESTED_MESSAGE
+        base = str(request.base_url).rstrip("/")
+        return {"webhook_path": "/api/webhooks/tradingview?token=" + tv_token(),
+                "local_url": base + "/api/webhooks/tradingview?token=" + tv_token(),
+                "message": SUGGESTED_MESSAGE}
+
+    @app.post("/api/tradingview/token")
+    def tradingview_new_token():
+        from .tradingview import new_token
+        db.update_settings({"tv_webhook_token": new_token()})
+        return {"ok": True}
+
+    @app.post("/api/webhooks/tradingview")
+    async def tradingview_webhook(request: Request, token: str = ""):
+        """Receives TradingView alert webhooks. TradingView cannot send custom
+        headers, so the secret travels in the URL; keep the URL private."""
+        from .tradingview import MAX_BODY, dedup_key, parse_alert
+        expected = db.get_settings()["tv_webhook_token"]
+        if not expected or not hmac.compare_digest(token.encode(), expected.encode()):
+            raise HTTPException(403, "Wrong or missing token")
+        raw = await request.body()
+        if len(raw) > MAX_BODY:
+            raise HTTPException(413, "Alert message too long")
+        text = raw.decode("utf-8", errors="replace")
+        alert = parse_alert(text)
+        db.add_notification(symbol=alert["symbol"], kind="tradingview", tone=alert["tone"], title=alert["title"],
+                            body=alert["body"], dedup_key=dedup_key(text))
+        return {"ok": True}
+
+    @app.get("/api/lab/pine")
+    def lab_pine(tactic: str, params: str = "{}"):
+        import json as _json
+
+        from .tactics import TACTICS
+        from .tradingview import pine_script
+        if tactic not in TACTICS:
+            raise HTTPException(400, "Unknown tactic")
+        try:
+            parsed = _json.loads(params)
+        except ValueError:
+            parsed = {}
+        return {"code": pine_script(tactic, parsed if isinstance(parsed, dict) else {})}
+
+    @app.get("/api/tradingview/studies")
+    def tradingview_studies(symbol: str, tactic: str = "", params: str = "{}"):
+        import json as _json
+
+        from .tactics import TACTICS
+        from .tradingview import studies, tv_symbol
+        try:
+            parsed = _json.loads(params)
+        except ValueError:
+            parsed = {}
+        key = tactic if tactic in TACTICS else None
+        return {"symbol": tv_symbol(_symbol(symbol)), "studies": studies(key, parsed if isinstance(parsed, dict) else {})}
 
     @app.get("/api/lab/tactics")
     def lab_tactics():

@@ -23,7 +23,7 @@ from urllib.parse import urlsplit
 
 log = logging.getLogger("stockanalysis.push")
 
-INSIDER_KINDS = {"insider_buy", "insider_buy_market", "insider_sell", "insider_cluster"}
+INSIDER_KINDS = {"insider_buy", "insider_buy_market", "insider_sell", "insider_cluster", "tradingview"}
 TONE_TAGS = {"bullish": "chart_with_upwards_trend", "bearish": "chart_with_downwards_trend",
              "warning": "warning", "neutral": "bell", "info": "bell"}
 

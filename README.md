@@ -119,6 +119,25 @@ holding on data they were not tuned on. See
 python -m stockanalysis.validation.lab
 ```
 
+## TradingView
+
+- **Charts:** every stock page (and the Indicator Lab) can show a TradingView
+  chart with all of TradingView's indicators and drawing tools, pre-loaded with
+  the app's averages or the tactic you are testing. It loads only after you
+  click, because TradingView's script then sees which stocks you view.
+- **Pine Script:** "Get Pine Script for TradingView" in the Indicator Lab
+  exports the tactic as a Pine v5 strategy (signals at the close, fills at the
+  next open, 0.1% commission, like the app's tests). Paste it into TradingView's
+  Pine Editor and open the Strategy Tester to check the results yourself.
+- **Alerts in:** Settings › TradingView alerts gives a private webhook address
+  and a ready-made alert message. TradingView webhooks need a paid TradingView
+  plan with two-factor sign-in, and TradingView must reach the app over
+  HTTPS, so run a tunnel such as `cloudflared tunnel --url http://localhost:8000`
+  or `ngrok http 8000`. Requests through a tunnel can reach only the webhook,
+  not the rest of the app.
+- TradingView is not used for price data: it has no public data API and its
+  terms do not allow scraping.
+
 ## How the signal is built
 
 | Rule | Points |
@@ -158,6 +177,7 @@ stockanalysis/
   market.py                 market risk indicator
   tactics.py                indicator tactics with adjustable settings
   lab_runner.py             runs a tactic on one stock (Indicator Lab)
+  tradingview.py            TradingView charts, Pine Script export, webhook alerts
   validation/               historical test: replay, signal study, portfolio, walk-forward
   sec.py                    SEC EDGAR client and Form 4 parser
   insiders.py               live insider-trade watcher and alerts

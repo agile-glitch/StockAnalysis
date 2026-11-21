@@ -466,6 +466,80 @@ function pageHead(title, subtitle, ...right) {
   return h("div.page-head", h("div", h("h1", title), subtitle ? h("p", subtitle) : null), h("div.row", right));
 }
 
+/* ---- TradingView ---- */
+let tvLoader = null;
+function loadTradingView() {
+  if (window.TradingView) return Promise.resolve();
+  if (!tvLoader) {
+    tvLoader = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = "https://s3.tradingview.com/tv.js";
+      script.onload = resolve;
+      script.onerror = () => { tvLoader = null; reject(new Error("Could not load TradingView. Check your internet connection.")); };
+      document.head.append(script);
+    });
+  }
+  return tvLoader;
+}
+
+const tvPref = {
+  get on() { try { return localStorage.getItem("tvCharts") === "1"; } catch (e) { return false; } },
+  set on(v) { try { localStorage.setItem("tvCharts", v ? "1" : "0"); } catch (e) { /* private mode */ } },
+};
+
+function isDark() {
+  const t = document.documentElement.dataset.theme;
+  return t ? t === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
+let tvCounter = 0;
+/** A TradingView chart for `symbol` with the given studies. Loads only after the user opts in. */
+function tradingViewChart(symbol, tactic, params, height = 480) {
+  const id = "tv_chart_" + (++tvCounter);
+  const host = h("div", { style: "height:" + height + "px;border-radius:8px;overflow:hidden" }, h("div", { id, style: "height:100%" }));
+  const wrap = h("div");
+  async function show() {
+    fill(wrap, host);
+    try {
+      const q = new URLSearchParams({ symbol, tactic: tactic || "", params: JSON.stringify(params || {}) });
+      const [setup] = await Promise.all([api("/api/tradingview/studies?" + q), loadTradingView()]);
+      new window.TradingView.widget({
+        container_id: id, autosize: true, symbol: setup.symbol, interval: "D", timezone: "America/New_York",
+        theme: isDark() ? "dark" : "light", style: "1", locale: "en", allow_symbol_change: true,
+        hide_side_toolbar: false, withdateranges: true, studies: setup.studies,
+      });
+    } catch (e) {
+      fill(wrap, h("div.note.warn", e.message));
+    }
+  }
+  if (tvPref.on) show();
+  else {
+    fill(wrap, h("div.note", h("span",
+      "Charts from TradingView load TradingView's script in your browser, so TradingView sees which stocks you look at. ",
+      h("button.btn.small", { style: "margin-left:6px", onclick: () => { tvPref.on = true; show(); } }, "Show TradingView chart"))));
+  }
+  return wrap;
+}
+
+function pineModal(tactic, params, label) {
+  const code = h("pre.code", "Loading…");
+  const copy = h("button.btn.primary", { onclick: async () => {
+    try { await navigator.clipboard.writeText(code.textContent); copy.textContent = "Copied ✓"; }
+    catch (e) { const r = document.createRange(); r.selectNodeContents(code); getSelection().removeAllRanges(); getSelection().addRange(r); copy.textContent = "Press Ctrl+C to copy"; }
+  } }, "Copy code");
+  const body = h("div.stack", { style: "margin-top:8px" },
+    h("ol.small.soft", { style: "margin:0;padding-left:18px;display:grid;gap:4px" },
+      h("li", "On TradingView, open a daily chart of any stock."),
+      h("li", "Open the Pine Editor at the bottom, paste this code, and click “Add to chart”."),
+      h("li", "Open the Strategy Tester tab to see its trades, win rate and returns. Change the settings in the strategy's settings panel."),
+      h("li", "Optional: create an alert on the strategy and send it to this app (Settings › TradingView alerts).")),
+    code);
+  api("/api/lab/pine?" + new URLSearchParams({ tactic, params: JSON.stringify(params) }))
+    .then((r) => { code.textContent = r.code; }).catch((e) => { code.textContent = e.message; });
+  modal("Pine Script: " + label, body, (close) => [h("button.btn", { onclick: close }, "Close"), copy]);
+  document.querySelector(".modal").classList.add("wide");
+}
+
 /* ---- market risk indicator ---- */
 function marketCard(m, budget) {
   if (!m) return null;
@@ -628,7 +702,11 @@ function stockPage(root, symbol) {
       a.problems && a.problems.length ? h("div.note.warn", { style: "margin-bottom:16px" }, "Some data is missing: " + a.problems.join("; ")) : null,
       h("div.stack",
         h("div.grid-main",
-          h("div.stack", chartCard(a), signalsCard(a), newsCard(a)),
+          h("div.stack", chartCard(a), h("section.card",
+            h("div.card-head", h("h2", "TradingView chart"), h("p", "All of TradingView's indicators and drawing tools; 50/200-day averages and RSI pre-loaded")),
+            tradingViewChart(a.symbol, null, null, 460),
+            h("p.muted.small", { style: "margin-top:8px" }, h("a", { href: "https://www.tradingview.com/chart/?symbol=" + encodeURIComponent(a.symbol), target: "_blank", rel: "noopener noreferrer" }, "Open " + a.symbol + " on TradingView.com ↗"))),
+            signalsCard(a), newsCard(a)),
           h("div.stack", planCard(a), optionsCard(a), earningsCard(a), insidersCard(a))),
         backtestCard(a.symbol)));
   }
@@ -871,11 +949,12 @@ function alertsPage(root) {
   let filter = "all";
   const list = h("div");
   const chips = h("div.chips");
-  const FILTERS = [["all", "All"], ["insider", "Insider trades"], ["bullish", "Buy side"], ["bearish", "Sell side"], ["warning", "Heads-up"]];
+  const FILTERS = [["all", "All"], ["insider", "Insider trades"], ["tradingview", "TradingView"], ["bullish", "Buy side"], ["bearish", "Sell side"], ["warning", "Heads-up"]];
 
   async function refresh() {
     const data = await api("/api/notifications?limit=300");
-    const items = data.items.filter((n) => filter === "all" || (filter === "insider" ? n.kind.startsWith("insider") : n.tone === filter));
+    const items = data.items.filter((n) => filter === "all" || (filter === "insider" ? n.kind.startsWith("insider")
+      : filter === "tradingview" ? n.kind === "tradingview" : n.tone === filter));
     fill(chips, FILTERS.map(([key, label]) => h("button.chip" + (filter === key ? ".on" : ""), { onclick: () => { filter = key; refresh(); } }, label)));
     fill(list, items.length ? items.map((n) => notificationItem(n)) : h("div.empty", "No alerts here yet. They appear when a signal changes, earnings approach, or an insider buys."));
   }
@@ -1041,7 +1120,7 @@ function settingsPage(root) {
     return h("label.switch", input, label);
   };
   const scope = h("select.input", { id: "set-push_scope", onchange: update },
-    h("option", { value: "insider", selected: st.push_scope === "insider" }, "Insider trades only"),
+    h("option", { value: "insider", selected: st.push_scope === "insider" }, "Insider trades and TradingView alerts"),
     h("option", { value: "all", selected: st.push_scope === "all" }, "Every alert"));
 
   const insiderStatus = h("div.note", "Checking…");
@@ -1108,9 +1187,51 @@ function settingsPage(root) {
       h("div.field", h("label", { htmlFor: "set-push_scope" }, "Send to phone"), scope),
       h("div.row", testBtn), pushStatus,
       h("p.muted.small", "Anyone who knows an ntfy topic name can read it, so pick a long random one."))),
+    tradingViewCard(),
     card("Updates", null,
       field("refresh_minutes", "Check prices and news every", "How often prices, news and earnings are refreshed in the background.", "minutes", 1)),
     h("div.row", h("button.btn.primary", { onclick: save }, "Save settings"), saved), error);
+
+  function tradingViewCard() {
+    const urlBox = h("input.input", { readOnly: true, value: "Loading…", style: "flex:1;min-width:0;font-family:ui-monospace,monospace;font-size:12.5px" });
+    const msgBox = h("pre.code", "");
+    const status = h("div.hint");
+    async function load() {
+      const setup = await api("/api/tradingview/setup");
+      urlBox.value = setup.local_url;
+      urlBox.dataset.path = setup.webhook_path;
+      msgBox.textContent = setup.message;
+    }
+    load();
+    const copyBtn = (getText, label) => {
+      const b = h("button.btn.small", { onclick: async () => { try { await navigator.clipboard.writeText(getText()); b.textContent = "Copied ✓"; } catch (e) { b.textContent = "Select and copy"; } } }, label);
+      return b;
+    };
+    return card("TradingView alerts", "Optional", h("div.stack",
+      h("p.soft", "Send alerts you set on TradingView (price levels, indicators, your own Pine strategies) into this app's alert feed, and to your phone if push is set up."),
+      h("div.field", h("label", "Webhook address (keep it private: it contains your secret token)"), h("div.row", { style: "flex-wrap:nowrap" }, urlBox, copyBtn(() => urlBox.value, "Copy"))),
+      h("div.field", h("label", "Suggested alert message"), msgBox, h("div.row", copyBtn(() => msgBox.textContent, "Copy message"))),
+      h("details", h("summary.small", "How to connect TradingView (needs a paid TradingView plan)"),
+        h("ol.small.soft", { style: "margin:6px 0 0;padding-left:18px;display:grid;gap:4px" },
+          h("li", "TradingView only sends webhooks on paid plans, and only with two-factor sign-in turned on."),
+          h("li", "TradingView must be able to reach this app over HTTPS on a normal web port. Since the app runs on your computer, start a free tunnel, for example: cloudflared tunnel --url http://localhost:8000 (Cloudflare) or ngrok http 8000. It prints a public https:// address."),
+          h("li", "Replace the start of the address above with the tunnel's address, keeping /api/webhooks/tradingview?token=… on the end. Requests arriving through a tunnel can reach only this webhook, not the rest of the app."),
+          h("li", "In TradingView, create an alert, tick “Webhook URL” in Notifications, paste the address, and paste the suggested message (or any text)."),
+          h("li", "The suggested message is for alerts on a strategy (such as one exported from the Indicator Lab). For a price or indicator alert, change {{strategy.order.action}} to buy or sell, or just write a plain sentence starting with the ticker, like “AAPL crossed above 200 buy”."),
+          h("li", "Alerts appear under Alerts › TradingView. If the address ever leaks, click “New secret token”."))),
+      h("div.row",
+        h("button.btn.small", { onclick: async () => {
+          try {
+            const res = await fetch(urlBox.value.replace(/^https?:\/\/[^/]+/, ""), { method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ ticker: "AAPL", action: "buy", price: "100.00", title: "Test alert from TradingView settings", message: "If you can read this in Alerts, the webhook works." }) });
+            status.className = res.ok ? "hint up" : "error-text";
+            status.textContent = res.ok ? "✓ Test alert received. Check Alerts." : "Test failed (" + res.status + ").";
+            refreshOverview();
+          } catch (e) { status.className = "error-text"; status.textContent = e.message; }
+        } }, "Send a test alert"),
+        h("button.btn.small.ghost", { onclick: async () => { await api("/api/tradingview/token", { method: "POST" }); load(); status.className = "hint"; status.textContent = "New token created. Update the address in your TradingView alerts."; } }, "New secret token")),
+      status));
+  }
 
   function update() {
     const budget = Number(inputs.budget.value) || 0;
@@ -1205,6 +1326,7 @@ function labPage(root) {
 
   function renderRun(r) {
     const s = r.strategy, hd = r.hold;
+    const tvHost = h("div");
     const better = (a, b, higher = true) => (a === null || b === null ? "" : (higher ? a > b : a < b) ? ".up" : ".down");
     const price = lineChart({ dates: r.chart.dates, height: 240, label: r.symbol + " price, highlighted while the indicator holds it",
       series: [
@@ -1237,6 +1359,10 @@ function labPage(root) {
           r.open_trade ? h("div.metric", h("div.k", "Open trade"), h("div.v", fmt.pct(r.open_trade.return_pct, 1))) : null)),
       price.legend, price.node, growth.legend, growth.node,
       h("p.muted.small", "Signals use each day's close and trade at the next open, with 0.1% cost per trade; cash earns T-bill interest. One stock over one decade is a tiny sample: a setting that looks great here is usually luck. Compare with the tested results below."),
+      h("div.row",
+        h("button.btn", { onclick: (e) => { e.target.disabled = true; tvHost.append(tradingViewChart(r.symbol, r.tactic, r.params, 520)); } }, "Show on TradingView"),
+        h("button.btn", { onclick: () => pineModal(r.tactic, r.params, r.label) }, "Get Pine Script for TradingView")),
+      tvHost,
       r.trades.length ? h("details", h("summary.small", "Recent trades (" + r.trades.length + ")"),
         dataTable([
           { label: "Bought", cell: (t) => fmt.date(t.entry_date) + " @ " + fmt.money(t.entry) },
