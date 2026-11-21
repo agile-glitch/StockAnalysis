@@ -21,7 +21,7 @@ from .push import Pusher
 from .sec import SecClient
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
-SYMBOL_RE = re.compile(r"^[A-Z][A-Z0-9.\-]{0,9}$")
+SYMBOL_RE = re.compile(r"^\^?[A-Z0-9][A-Z0-9.\-]{0,11}(=F|=X)?$")   # stocks, ETFs, GC=F, BTC-USD, ^GSPC
 
 
 class SymbolIn(BaseModel):
@@ -55,7 +55,7 @@ INSIDER_SETTINGS = {"sec_contact", "insider_poll_minutes", "insider_alert_sells"
 def _symbol(raw: str) -> str:
     symbol = (raw or "").strip().upper()
     if not SYMBOL_RE.match(symbol):
-        raise HTTPException(400, "Enter a ticker symbol such as AAPL.")
+        raise HTTPException(400, "Enter a ticker symbol such as AAPL, GLD, GC=F or BTC-USD.")
     return symbol
 
 
@@ -321,6 +321,11 @@ def create_app(db: Database | None = None, provider: CachedProvider | None = Non
             parsed = {}
         key = tactic if tactic in TACTICS else None
         return {"symbol": tv_symbol(_symbol(symbol)), "studies": studies(key, parsed if isinstance(parsed, dict) else {})}
+
+    @app.get("/api/markets")
+    def markets_overview():
+        from .markets_view import overview
+        return overview(provider, engine)
 
     @app.get("/api/lab/tactics")
     def lab_tactics():

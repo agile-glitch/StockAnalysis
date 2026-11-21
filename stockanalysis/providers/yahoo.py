@@ -222,5 +222,5 @@ class YahooProvider(Provider):
             {"symbol": q.get("symbol"), "name": q.get("shortname") or q.get("longname") or "",
              "type": q.get("quoteType")}
             for q in quotes
-            if q.get("symbol") and q.get("quoteType") in ("EQUITY", "ETF")
+            if q.get("symbol") and q.get("quoteType") in ("EQUITY", "ETF", "FUTURE", "CRYPTOCURRENCY", "INDEX", "CURRENCY")
         ]

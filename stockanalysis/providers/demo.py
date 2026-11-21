@@ -74,7 +74,13 @@ class DemoProvider(Provider):
     def _profile(self, symbol: str):
         if symbol in PROFILES:
             return PROFILES[symbol]
-        if not symbol.isalpha() or len(symbol) > 5:
+        # Real-looking symbols only: AAPL, BRK-B, GC=F, BTC-USD, ^GSPC.
+        base = symbol.lstrip("^")
+        for suffix in ("=F", "=X", "-USD"):
+            if base.endswith(suffix):
+                base = base[: -len(suffix)]
+        base = base.replace("-", "").replace(".", "")
+        if not base.isalpha() or len(base) > 6:
             raise ProviderError(f"No price data for {symbol}. Check the ticker symbol.")
         rng = np.random.default_rng(_seed(symbol, "profile"))
         return (float(rng.uniform(-0.25, 0.45)), float(rng.uniform(0.18, 0.5)),

@@ -122,6 +122,28 @@ failed on 92 fresh stocks, so the app's rules were left unchanged. See
 python -m stockanalysis.validation.lab
 ```
 
+## Markets: gold, silver, oil, bonds, currencies, crypto
+
+The **Markets** page tracks 27 markets beyond single stocks (gold, silver,
+platinum, oil, natural gas, copper, broad commodities, agriculture, Treasury,
+inflation-linked, corporate and high-yield bonds, the dollar, euro and yen,
+real estate, US, foreign and emerging stock indexes, Bitcoin and Ether), with
+each one's live trend under the 10-month rule and how trend rules did against
+holding it over its history. Any of them, or any symbol such as `GC=F`,
+`BTC-USD` or `^GSPC`, can be added to the watchlist.
+
+Findings ([docs/MARKETS.md](docs/MARKETS.md)): trend rules helped most in
+commodity funds (oil, natural gas, broad commodities, farm goods) and Ether;
+holding did as well or better in gold, bonds, real estate and most stock
+markets. A diversified 10-month trend portfolio (Faber 2007) had by far the
+smallest crashes but less return than a 60/40 mix. "Stocks we are best at"
+did not persist: the stocks where a rule did best in 2003–2014 did no better
+than the rest in 2015–2026. To rerun:
+
+```bash
+python -m stockanalysis.validation.markets
+```
+
 ## TradingView
 
 - **Charts:** every stock page (and the Indicator Lab) can show a TradingView
@@ -181,6 +203,7 @@ stockanalysis/
   tactics.py                indicator tactics with adjustable settings
   lab_runner.py             runs a tactic on one stock (Indicator Lab)
   tradingview.py            TradingView charts, Pine Script export, webhook alerts
+  markets_view.py           live view of other markets for the Markets page
   validation/               historical test: replay, signal study, portfolio, walk-forward
   sec.py                    SEC EDGAR client and Form 4 parser
   insiders.py               live insider-trade watcher and alerts
@@ -192,6 +215,7 @@ docs/INSIDER_ALERTS.md      how to get insider-trade alerts, compared
 docs/VALIDATION.md          the historical test results (generated)
 docs/INDICATOR_LAB.md       indicator-settings test results (generated)
 docs/EXPERIMENTS.md         fitted weights and indicator combinations (generated)
+docs/MARKETS.md             other markets and stock persistence (generated)
 tests/                      pytest suite (runs offline on demo data)
 ```
 
