@@ -96,6 +96,20 @@ So the dashboard leads with a **Market risk** indicator (a suggested share of
 your budget in stocks, with an alert when the market turns), and the stock
 ratings are best read as information, not as a proven trading system.
 
+**Scorecard** ([docs/SCORECARD.md](docs/SCORECARD.md), top of the Track
+record page): every method the app recommends, on past prices with costs.
+
+| Method | Period | Yearly return | Worst drop | Compared with |
+| --- | --- | --- | --- | --- |
+| Stock Buy/Sell signals (unseen stocks) | 2006–2026 | +9.6% | −45% | holding them: +12.1%, −55% |
+| Market risk switch | 1994–2026 | +9.1% | −21% | S&P 500: +10.4%, −55% |
+| Trend portfolio (8 assets) | 2006–2026 | +4.7% | −15% | 60/40: +8.0%, −31% |
+| Market trend alerts (picked on data to 2015) | 2016–2026 | +5.5% | −16% | holding them: +5.1%, −34% |
+
+All four made money and beat T-bills; only the market trend alerts made more
+than their comparison, and by a small margin. The real gain is smaller worst
+drops. Rerun with `python -m stockanalysis.validation.scorecard`.
+
 To rerun the test (downloads about 190 price histories the first time):
 
 ```bash

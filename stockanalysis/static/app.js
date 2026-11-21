@@ -1626,6 +1626,8 @@ function trackRecordPage(root) {
   let report = null;
   let stops = null;
   let experiments = null;
+  let scorecard = null;
+  let scoreKey = null;
   const body = h("div.stack");
   fill(root, pageHead("Track record", "The rules replayed day by day on 20+ years of past prices, then checked against what happened next, on stocks and years they were not tuned on."), body);
 
@@ -1744,8 +1746,70 @@ function trackRecordPage(root) {
         h("li", "Past results do not guarantee future ones, and markets change once rules become popular.")),
       h("p.muted.small", { style: "margin-top:8px" }, "Run on " + new Date(r.generated).toLocaleString() + ". Rerun with: python -m stockanalysis.validation"));
 
-    fill(body, ...storyCards(r), experiments ? experimentsCard(experiments) : null, stops ? stopsCard(stops) : null, h("h2", { style: "margin-top:12px;font-size:18px" }, "Round 1 in detail: the app's own Buy and Sell rules"),
+    fill(body, scorecard ? scorecardCard(scorecard) : null, ...storyCards(r), experiments ? experimentsCard(experiments) : null, stops ? stopsCard(stops) : null, h("h2", { style: "margin-top:12px;font-size:18px" }, "Round 1 in detail: the app's own Buy and Sell rules"),
       h("div.row", rulesChips), summary, h("div.row", cellChips), portfolioCard, signalCard, yearCard, searchCard, caveats);
+  }
+
+  function scoreSummary(methods) {
+    const made = methods.filter((m) => m.verdict.made_money && m.verdict.beat_cash);
+    const more = methods.filter((m) => m.verdict.more_money_than_comparison);
+    const safer = methods.filter((m) => m.verdict.smaller_worst_drop);
+    const lead = made.length === methods.length ? "Yes: every method made money and beat T-bills. "
+      : made.length + " of " + methods.length + " methods made money and beat T-bills. ";
+    const vs = more.length === 0 ? "None made more money than its comparison (usually simply holding). "
+      : more.length === methods.length ? "All made more money than their comparison. "
+      : "Only " + more.map((m) => m.name.toLowerCase()).join(" and ") + " made more money than " + (more.length > 1 ? "their comparisons" : "its comparison") + "; the rest earned less than simply holding. ";
+    const drop = safer.length ? safer.length + " of " + methods.length + " had a clearly smaller worst drop, which is what they are best at." : "";
+    return h("div.note", { style: "margin-bottom:10px;display:block" }, h("strong", lead), vs + drop);
+  }
+
+  function scorecardCard(sc) {
+    const methods = sc.methods;
+    if (!methods.length) return null;
+    if (!scoreKey || !methods.find((m) => m.key === scoreKey)) scoreKey = (methods.find((m) => m.curve) || methods[0]).key;
+    const mark = (ok) => h("span.pill." + (ok ? "bullish" : "bearish"), ok ? "✓" : "✗");
+    const pct1 = (x) => fmt.pct(x, 1);
+    const sel = methods.find((m) => m.key === scoreKey);
+    let chartBlock = null;
+    if (sel && sel.curve) {
+      const chart = lineChart({ dates: sel.curve.strategy.dates, height: 230, label: "Growth of $100: " + sel.name + " vs " + sel.comparison.name,
+        yFormat: (x) => "$" + (Math.round(x) || 0).toLocaleString("en-US"),
+        series: [{ name: sel.name, color: "var(--series-1)", values: sel.curve.strategy.values },
+                 { name: sel.comparison.name, color: "var(--series-2)", values: sel.curve.comparison.values }] });
+      chartBlock = h("div", { style: "margin-top:12px" },
+        h("div.chips", methods.filter((m) => m.curve).map((m) => h("button.chip" + (m.key === scoreKey ? ".on" : ""), { onclick: () => { scoreKey = m.key; render(); } }, m.name))),
+        h("div", { style: "margin-top:8px" }, chart.legend), h("div", { style: "margin-top:6px" }, chart.node));
+    }
+    const t = sc.trend_alerts;
+    return h("section.card",
+      h("div.card-head", h("h2", "Scorecard: is each method profitable?"), h("p", "Every method the app recommends, replayed on past prices with costs")),
+      scoreSummary(methods),
+      dataTable([
+        { label: "Method", cell: (m) => h("div", h("strong", m.name), h("div.small.muted", m.period)) },
+        { label: "Tested on unseen data?", hideSmall: true, cell: (m) => h("div.small.soft", { style: "max-width:220px" }, m.unseen) },
+        { label: "Yearly return", right: true, cell: (m) => h("div", h("strong", pct1(m.strategy.cagr_pct)), h("div.small.muted", pct1(m.comparison.cagr_pct) + " comparison")) },
+        { label: "Worst drop", right: true, cell: (m) => h("div", h("strong", fmt.pct(m.strategy.max_drawdown_pct, 0)), h("div.small.muted", fmt.pct(m.comparison.max_drawdown_pct, 0) + " comparison")) },
+        { label: "Made money", cell: (m) => mark(m.verdict.made_money) },
+        { label: "Beat T-bills", hideSmall: true, cell: (m) => mark(m.verdict.beat_cash) },
+        { label: "More than comparison", hideSmall: true, cell: (m) => mark(m.verdict.more_money_than_comparison) },
+        { label: "Better per unit of risk", hideSmall: true, cell: (m) => mark(m.verdict.better_risk_adjusted) },
+        { label: "Profitable 3-year stretches", right: true, hideSmall: true, cell: (m) => (m.rolling["3y"] ? m.rolling["3y"].made_money_pct + "%" : "—") },
+      ], methods),
+      h("p.small.soft", { style: "margin-top:8px" }, "Compared with: " + methods.map((m) => m.name + " → " + m.comparison.name).join("; ") +
+        ". Profitable 3-year stretches = share of all 3-year periods, starting on any day, that ended with a gain."),
+      chartBlock,
+      t ? h("div", { style: "margin-top:12px" }, h("h3", "Market trend alerts without hindsight"),
+        h("p.small.soft", "The markets that get alerts today were chosen using their whole history, which flatters them. So the same choosing rule was run on data up to " +
+          t.pick_end.slice(0, 4) + " only. It picked " + t.picks.join(", ") + ". Those were then traded on every 10-month-rule alert from " + t.test_start.slice(0, 4) + ":"),
+        dataTable([
+          { label: "Basket", cell: ([k]) => ({ picked: "Picked before " + t.test_start.slice(0, 4), all: "All " + t.eligible.length + " markets, no picking", today_list: "Today's list (hindsight)" })[k] },
+          { label: "Alerts followed", right: true, cell: ([, b]) => h("div", pct1(b.rule.cagr_pct) + "/yr", h("div.small.muted", "worst " + fmt.pct(b.rule.max_drawdown_pct, 0))) },
+          { label: "Held instead", right: true, cell: ([, b]) => h("div", pct1(b.hold.cagr_pct) + "/yr", h("div.small.muted", "worst " + fmt.pct(b.hold.max_drawdown_pct, 0))) },
+          { label: "Trades that won", right: true, hideSmall: true, cell: ([, b]) => (b.win_rate_pct === null ? "—" : b.win_rate_pct + "% of " + b.trades) },
+        ], Object.entries(t.baskets)),
+        h("p.muted.small", { style: "margin-top:6px" }, "Most single trades lost a little; a few long trends paid for them. That is normal for trend rules, so expect to be wrong more often than right. " +
+          "Choosing markets added little over using the rule on all of them, which had a better return per unit of risk.")) : null,
+      h("p.muted.small", { style: "margin-top:8px" }, "Full tables: docs/SCORECARD.md. Past results do not guarantee future ones."));
   }
 
   function storyCards(r) {
@@ -1900,8 +1964,9 @@ function trackRecordPage(root) {
       h("p.small", h("strong", "Adopted: " + (c.adopt ? "yes" : "no") + ". "), "Rules fixed before running: change the app only if it beats holding on the fresh stocks in both periods and the result is statistically significant."));
   }
 
-  Promise.all([api("/api/validation"), api("/api/validation/stops").catch(() => null), api("/api/validation/experiments").catch(() => null)])
-    .then(([r, st, ex]) => { report = r; stops = st; experiments = ex; render(); })
+  Promise.all([api("/api/validation"), api("/api/validation/stops").catch(() => null), api("/api/validation/experiments").catch(() => null),
+    api("/api/validation/scorecard").catch(() => null)])
+    .then(([r, st, ex, sc]) => { report = r; stops = st; experiments = ex; scorecard = sc; render(); })
     .catch((e) => fill(body, h("section.card", h("div.empty", e.message))));
   return {};
 }
