@@ -6,13 +6,22 @@ from stockanalysis.providers import CachedProvider
 from stockanalysis.providers.demo import DemoProvider
 from stockanalysis.server import create_app
 
+from stockanalysis.sec import SecClient
+
 from .conftest import TODAY
+from .sec_fakes import FakeEdgar
+from .test_push import Recorder
+
+PUSHES = Recorder()
 
 
 @pytest.fixture
 def client():
     db = Database(":memory:")
-    app = create_app(db=db, provider=CachedProvider(DemoProvider(today=TODAY)), background=False)
+    edgar = FakeEdgar()
+    sec_client = SecClient(lambda: db.get_settings()["sec_contact"], opener=edgar, per_second=1000)
+    app = create_app(db=db, provider=CachedProvider(DemoProvider(today=TODAY)), background=False,
+                     sec_client=sec_client, push_opener=PUSHES)
     app.state.engine._today_fn = lambda: TODAY
     app.state.engine.scan()
     with TestClient(app) as c:
@@ -61,6 +70,8 @@ def test_changing_the_budget_resizes_every_plan(client):
 @pytest.mark.parametrize("body", [
     {"budget": 0}, {"budget": -5}, {"budget": "lots"}, {"risk_per_trade_pct": 50},
     {"option_risk_pct": 99}, {"refresh_minutes": 0}, {"made_up": 1},
+    {"sec_contact": "no-email-here"}, {"sec_contact": "only@email.com"}, {"push_url": "ftp://x"},
+    {"push_scope": "everything"}, {"insider_poll_minutes": 0}, {"insider_market_min_value": True},
 ])
 def test_bad_settings_are_rejected(client, body):
     res = client.put("/api/settings", json=body)
@@ -106,3 +117,26 @@ def test_feeds_and_search(client):
     assert client.get("/api/search?q=apple").json()[0]["symbol"] == "AAPL"
     assert client.get("/api/search?q=").json() == []
     assert client.post("/api/scan").status_code == 200
+
+
+def test_insider_settings_status_and_feeds(client):
+    status = client.get("/api/insiders/status").json()
+    assert status["configured"] is False and status["market_alerts"] is True
+    assert client.post("/api/insiders/poll").status_code == 400
+    res = client.put("/api/settings", json={"sec_contact": "Jane Doe jane@example.com",
+                                             "insider_market_min_value": 250000, "insider_alert_sells": True})
+    assert res.status_code == 200 and res.json()["sec_contact"] == "Jane Doe jane@example.com"
+    status = client.get("/api/insiders/status").json()
+    assert status["configured"] is True and status["last_poll"] and status["last_error"] is None
+    assert client.get("/api/overview").json()["insiders"]["configured"] is True
+    assert client.get("/api/insiders?scope=market").json() == []
+    assert isinstance(client.get("/api/insiders").json(), list)
+
+
+def test_push_test_endpoint(client):
+    assert client.post("/api/push/test", json={}).status_code == 400          # nothing configured
+    before = len(PUSHES.sent)
+    assert client.post("/api/push/test", json={"url": "https://ntfy.sh/my-topic"}).json() == {"ok": True}
+    assert len(PUSHES.sent) == before + 1
+    bad = client.post("/api/push/test", json={"url": "https://ntfy.sh/"})
+    assert bad.status_code == 400 and "ntfy" in bad.json()["detail"]

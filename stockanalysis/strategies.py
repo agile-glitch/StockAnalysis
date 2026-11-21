@@ -308,11 +308,18 @@ def summarize_insiders(trades: list[dict], today: date, window: int = INSIDER_WI
         d = _as_date(t.get("date"))
         if d and 0 <= (today - d).days <= window:
             recent.append(t)
-    buys = [t for t in recent if t.get("kind") == "buy"]
+    # Buys made under a pre-arranged Rule 10b5-1 plan were scheduled months
+    # earlier, so they are not counted as a fresh view on the stock.
+    planned = [t for t in recent if t.get("kind") == "buy" and t.get("plan_10b5_1")]
+    buys = [t for t in recent if t.get("kind") == "buy" and not t.get("plan_10b5_1")]
     sells = [t for t in recent if t.get("kind") == "sell"]
+    buyers = sorted({t.get("insider") or "?" for t in buys})
+    routine = sorted({t.get("insider") or "?" for t in buys if t.get("routine") == "routine"})
     return {
         "window_days": window,
-        "buyers": sorted({t.get("insider") or "?" for t in buys}),
+        "buyers": buyers,
+        "routine_buyers": routine,
+        "planned_buys": len(planned),
         "sellers": sorted({t.get("insider") or "?" for t in sells}),
         "buy_count": len(buys),
         "sell_count": len(sells),
@@ -334,16 +341,20 @@ def insider_signal(trades: list[dict] | None, today: date) -> Signal:
     if trades is None:
         return _unavailable("insiders", name, cat, "Insider filings unavailable")
     s = summarize_insiders(trades, today)
-    n_buy, n_sell = len(s["buyers"]), len(s["sellers"])
+    # Routine insiders (same month every year) carry little information:
+    # count them as half a buyer each.
+    n_buy = len(s["buyers"]) - 0.5 * len(s["routine_buyers"])
+    n_sell = len(s["sellers"])
     if n_buy >= 3:
         score = 1.0
-        headline = f"Cluster buying: {n_buy} insiders bought {_money(s['buy_value'])} in {s['window_days']} days"
-    elif n_buy == 2:
+        headline = f"Cluster buying: {len(s['buyers'])} insiders bought {_money(s['buy_value'])} in {s['window_days']} days"
+    elif n_buy >= 2:
         score = 0.7
-        headline = f"2 insiders bought {_money(s['buy_value'])} in {s['window_days']} days"
-    elif n_buy == 1:
-        score = 0.4
-        headline = f"{s['buyers'][0].title()} bought {_money(s['buy_value'])} of stock"
+        headline = f"{len(s['buyers'])} insiders bought {_money(s['buy_value'])} in {s['window_days']} days"
+    elif n_buy > 0:
+        score = 0.4 if n_buy >= 1 else 0.2
+        headline = (f"{s['buyers'][0].title()} bought {_money(s['buy_value'])} of stock" if len(s["buyers"]) == 1
+                    else f"{len(s['buyers'])} insiders bought {_money(s['buy_value'])} in {s['window_days']} days")
     elif n_sell >= 3:
         score = -0.3
         headline = f"{n_sell} insiders sold {_money(s['sell_value'])} in {s['window_days']} days, none bought"
@@ -353,7 +364,9 @@ def insider_signal(trades: list[dict] | None, today: date) -> Signal:
     else:
         score = 0.0
         headline = f"No open-market insider trades in {s['window_days']} days"
-    if n_buy and n_sell:
+    if s["routine_buyers"]:
+        headline += f" ({len(s['routine_buyers'])} routine)"
+    if n_buy > 0 and n_sell:
         # Buying is the informative side, but offsetting sales temper it.
         score -= 0.1 * min(n_sell, 3)
         headline += f"; {n_sell} sold"

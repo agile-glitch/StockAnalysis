@@ -49,9 +49,10 @@ def _round_list(series, digits: int = 2) -> list:
 
 
 class Engine:
-    def __init__(self, db: Database, provider: CachedProvider, today_fn=None):
+    def __init__(self, db: Database, provider: CachedProvider, today_fn=None, insiders=None):
         self.db = db
         self.provider = provider
+        self.insiders = insiders  # InsiderService (SEC Form 4) or None
         self._today_fn = today_fn or date.today
         self.analyses: dict[str, dict] = db.load_analyses()
         self._scan_lock = threading.Lock()
@@ -104,7 +105,7 @@ class Engine:
         upcoming = sorted(e["date"] for e in earnings if e["date"] >= today.isoformat())
         next_earnings = date.fromisoformat(upcoming[0]) if upcoming else None
 
-        insiders = attempt("Insider trades", lambda: self.provider.insiders(symbol), None)
+        insiders, insider_source = attempt("Insider trades", lambda: self._insider_trades(symbol), (None, "yahoo"))
 
         signals = strategies.technical_signals(last) + [
             strategies.earnings_signal(earnings, today),
@@ -168,6 +169,7 @@ class Engine:
                 "history": earnings,
             },
             "insiders": {
+                "source": insider_source,
                 "available": insiders is not None,
                 "trades": insiders or [],
                 "summary": strategies.summarize_insiders(insiders or [], today),
@@ -270,16 +272,18 @@ class Engine:
                      f"{latest['date']}. Prices often keep drifting in the direction of the surprise.",
                      f"earnings_result:{latest['date']}")
 
-        # 5. Insider buying.
+        # 5. Insider buying. With SEC filings connected, the insider watcher
+        # sends these within minutes of filing, with more detail.
         cutoff = (today - timedelta(days=INSIDER_ALERT_DAYS)).isoformat()
-        for trade in cur["insiders"]["trades"]:
+        from_sec = cur["insiders"].get("source") == "sec"
+        for trade in ([] if from_sec else cur["insiders"]["trades"]):
             if trade["kind"] == "buy" and trade["date"] >= cutoff:
                 value = f"${trade['value']:,.0f}" if trade.get("value") else "an undisclosed amount"
                 push("insider_buy", "bullish", "Insider bought shares",
                      f"{trade['insider'].title()} ({trade['position'] or 'insider'}) bought {value} "
                      f"of stock on {trade['date']}.", f"insider_buy:{trade['insider']}:{trade['date']}")
         summary = cur["insiders"]["summary"]
-        if len(summary["buyers"]) >= 3:
+        if len(summary["buyers"]) >= 3 and not from_sec:
             push("insider_cluster", "bullish", "Cluster insider buying",
                  f"{len(summary['buyers'])} different insiders bought a combined "
                  f"${summary['buy_value']:,.0f} in the last {summary['window_days']} days. "
@@ -415,6 +419,11 @@ class Engine:
                 "available": round(available_cash(settings, positions), 2),
             },
             "unread": self.db.unread_count(),
+            "insiders": {
+                "configured": bool(self.insiders and self.insiders.configured),
+                "last_poll": self.insiders.status["last_poll"] if self.insiders else None,
+                "last_error": self.insiders.status["last_error"] if self.insiders else None,
+            },
             "status": self.status,
             "demo": self.provider.is_demo,
         }
@@ -455,6 +464,14 @@ class Engine:
                 "direction": a["direction"],
             })
         return sorted(rows, key=lambda r: (r["next_date"] is None, r["next_date"] or ""))
+
+    def _insider_trades(self, symbol: str) -> tuple[list[dict] | None, str]:
+        """SEC Form 4 data once synced (exact codes, 10b5-1 flags), else Yahoo's summary."""
+        if self.insiders:
+            trades = self.insiders.trades_for_symbol(symbol)
+            if trades is not None:
+                return trades, "sec"
+        return self.provider.insiders(symbol), "yahoo"
 
     def insider_feed(self) -> list[dict]:
         rows = []

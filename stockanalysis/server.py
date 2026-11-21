@@ -13,7 +13,10 @@ from pydantic import BaseModel, Field
 
 from .db import Database, SettingsError
 from .engine import Engine, Scheduler
+from .insiders import InsiderService, InsiderWatcher
 from .providers import CachedProvider, ProviderError, make_provider
+from .push import Pusher
+from .sec import SecClient
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
 SYMBOL_RE = re.compile(r"^[A-Z][A-Z0-9.\-]{0,9}$")
@@ -34,6 +37,13 @@ class ReadIn(BaseModel):
     ids: list[int] | None = None
 
 
+class PushTestIn(BaseModel):
+    url: str | None = None
+
+INSIDER_SETTINGS = {"sec_contact", "insider_poll_minutes", "insider_alert_sells", "insider_sell_min_value",
+                    "insider_market_alerts", "insider_market_min_value"}
+
+
 def _symbol(raw: str) -> str:
     symbol = (raw or "").strip().upper()
     if not SYMBOL_RE.match(symbol):
@@ -42,23 +52,34 @@ def _symbol(raw: str) -> str:
 
 
 def create_app(db: Database | None = None, provider: CachedProvider | None = None, demo: bool = False,
-               background: bool = True) -> FastAPI:
+               background: bool = True, sec_client: SecClient | None = None, push_opener=None) -> FastAPI:
     db = db or Database()
     provider = provider or make_provider(demo=demo)
-    engine = Engine(db, provider)
+    # SEC filings are real even in demo mode, so insider alerts work in both.
+    sec_client = sec_client or SecClient(lambda: db.get_settings()["sec_contact"])
+    insider_service = InsiderService(db, sec_client)
+    engine = Engine(db, provider, insiders=insider_service)
+    insider_service.on_update = lambda symbol: engine.refresh_symbol(symbol)
+    pusher = Pusher(db.get_settings, opener=push_opener)
+    db.on_notification(pusher)
     scheduler = Scheduler(engine) if background else None
+    watcher = InsiderWatcher(insider_service) if background else None
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         if scheduler:
             scheduler.start()
+            watcher.start()
         yield
         if scheduler:
             scheduler.stop()
+            watcher.stop()
 
     app = FastAPI(title="StockAnalysis", lifespan=lifespan)
     app.state.engine = engine
     app.state.db = db
+    app.state.insiders = insider_service
+    app.state.pusher = pusher
 
     def rescan(force: bool = False):
         if scheduler:
@@ -126,10 +147,18 @@ def create_app(db: Database | None = None, provider: CachedProvider | None = Non
             settings = db.update_settings(changes)
         except SettingsError as exc:
             raise HTTPException(400, str(exc)) from exc
+        if INSIDER_SETTINGS & set(changes):
+            insider_poll()
         # Trade sizes and option picks depend on the budget, so recompute them
         # now. Market data comes from cache, so this is quick.
         engine.scan(wait=True, notify=False)
         return settings
+
+    def insider_poll():
+        if watcher:
+            watcher.trigger()
+        else:
+            insider_service.poll()
 
     @app.get("/api/positions")
     def positions():
@@ -191,8 +220,34 @@ def create_app(db: Database | None = None, provider: CachedProvider | None = Non
         return engine.earnings_calendar()
 
     @app.get("/api/insiders")
-    def insiders():
+    def insiders(scope: str = "watchlist", days: int = 14, min_value: float = 0):
+        if scope == "market":
+            return insider_service.market_buys(days=max(1, min(days, 90)), min_value=max(0.0, min_value))
         return engine.insider_feed()
+
+    @app.get("/api/insiders/status")
+    def insider_status():
+        settings = db.get_settings()
+        return {**insider_service.status, "configured": insider_service.configured,
+                "market_alerts": settings["insider_market_alerts"],
+                "push": {**pusher.status, "enabled": bool(settings["push_url"])}}
+
+    @app.post("/api/insiders/poll")
+    def poll_insiders():
+        if not insider_service.configured:
+            raise HTTPException(400, "Add your name and email under Settings > Insider alerts first.")
+        insider_poll()
+        return insider_service.status
+
+    @app.post("/api/push/test")
+    def push_test(body: PushTestIn):
+        try:
+            pusher.send_now({"title": "StockAnalysis test alert", "tone": "bullish", "kind": "insider_buy",
+                             "body": "Push notifications are working. Insider-trade alerts will arrive here."},
+                            url=(body.url or "").strip() or None)
+        except Exception as exc:
+            raise HTTPException(400, f"Could not send: {exc}") from exc
+        return {"ok": True}
 
     @app.post("/api/scan")
     def scan():

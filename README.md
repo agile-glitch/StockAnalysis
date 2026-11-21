@@ -49,7 +49,23 @@ network), `--no-browser`.
   its stop, an insider buys, earnings are a week away or just reported, news
   turns sharply, or a new options idea appears. The background scan runs every
   15 minutes by default.
-- **News, Earnings, Insider trades:** combined feeds across your watchlist.
+- **Insider trade alerts (live from the SEC):** enter a name and email under
+  Settings > Insider trade alerts (the SEC requires a contact from automated
+  tools; it is only sent to sec.gov). The app then reads Form 4 filings every
+  2 minutes and alerts on:
+  - every open-market purchase at a stock on your watchlist, and large sales
+    if you turn them on;
+  - big purchases by officers and directors at any US company ($500K and up by
+    default);
+  - cluster buying, when 3 or more insiders buy one stock within 30 days.
+  Each alert says who bought, their role, size, price, stake change, whether it
+  was a pre-planned 10b5-1 trade, and whether it fits a routine yearly pattern,
+  with a link to the filing. See [docs/INSIDER_ALERTS.md](docs/INSIDER_ALERTS.md)
+  for every other way to get insider alerts and the research behind the filters.
+- **Phone notifications:** paste an [ntfy](https://ntfy.sh) topic link (free
+  app), or a Discord or Slack webhook, under Settings > Phone notifications.
+- **News, Earnings, Insider trades:** combined feeds across your watchlist,
+  plus a live market-wide feed of insider purchases.
 - **Positions:** record what you bought to get sell alerts and to subtract it
   from the cash available for new trades.
 - **Settings:** budget (also editable from the top bar), risk per stock trade,
@@ -92,9 +108,13 @@ stockanalysis/
   engine.py                 analysis, notifications, background scheduler
   db.py                     SQLite: settings, watchlist, positions, alerts
   server.py                 HTTP API (FastAPI)
+  sec.py                    SEC EDGAR client and Form 4 parser
+  insiders.py               live insider-trade watcher and alerts
+  push.py                   phone push (ntfy, Discord, Slack)
   providers/                Yahoo Finance (live) and demo data sources
   static/                   web interface (no build step)
 docs/STRATEGIES.md          research behind the rules
+docs/INSIDER_ALERTS.md      how to get insider-trade alerts, compared
 tests/                      pytest suite (runs offline on demo data)
 ```
 
@@ -116,6 +136,7 @@ python -m pytest
 - Yahoo Finance data is free but unofficial and can be delayed, rate-limited or
   briefly unavailable; the app keeps the last good values and says so.
   Option quotes outside market hours often lack a live bid/ask.
-- Insider data covers each company's recent filings only, so routine and
-  one-off insiders are not yet told apart.
+- Without an SEC contact, insider data falls back to Yahoo's delayed summary.
+  The market-wide insider feed only covers filings published while the app is
+  running. Form 144 and congressional trades are not tracked.
 - The backtest covers only the price rules and ignores costs and taxes.

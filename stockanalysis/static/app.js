@@ -380,7 +380,7 @@ function renderTopbar() {
   const banner = $("banner");
   if (o.demo) {
     banner.hidden = false;
-    banner.textContent = "Demo mode: prices, news and filings are simulated. Start without --demo for live market data.";
+    banner.textContent = "Demo mode: prices, news and earnings are simulated (insider filings are real once SEC alerts are connected). Start without --demo for live market data.";
   } else if (status.last_error) {
     banner.hidden = false;
     banner.textContent = "Some data could not be updated (" + status.last_error + "). Showing the last good values.";
@@ -423,7 +423,8 @@ function notificationItem(n, onOpen) {
   };
   return h("div.feed-item" + (n.read ? "" : ".unread"), { style: "cursor:pointer", onclick: open },
     toneIcon(n.tone),
-    h("div.f-main", h("div.f-title", n.title), h("div.f-body", n.body), h("div.f-meta", fmt.ago(n.created_at))));
+    h("div.f-main", h("div.f-title", n.title), h("div.f-body", n.body),
+      h("div.f-meta", fmt.ago(n.created_at), n.link ? [" · ", h("a", { href: n.link, target: "_blank", rel: "noopener noreferrer", onclick: (e) => e.stopPropagation() }, "SEC filing ↗")] : null)));
 }
 
 function toast(n) {
@@ -730,8 +731,17 @@ function stockPage(root, symbol) {
   function insidersCard(a) {
     const sum = a.insiders.summary;
     const trades = a.insiders.trades.filter((t) => t.kind !== "other").slice(0, 8);
+    const source = a.insiders.source === "sec"
+      ? h("p.muted.small", { style: "margin-top:8px" }, "From SEC Form 4 filings, checked every few minutes.")
+      : h("p.muted.small", { style: "margin-top:8px" }, "From Yahoo Finance's summary. ", h("a", { href: "#/settings" }, "Connect SEC filings"), " for live alerts, exact trade types and 10b5-1 flags.");
+    const notes = [
+      sum.planned_buys ? sum.planned_buys + " pre-planned 10b5-1 buy(s) not counted" : null,
+      sum.routine_buyers && sum.routine_buyers.length ? sum.routine_buyers.length + " routine buyer(s) counted at half weight" : null,
+    ].filter(Boolean);
     return card("Insider trades", "Last " + sum.window_days + " days: " + sum.buyers.length + " buyers, " + sum.sellers.length + " sellers",
-      a.insiders.available ? insiderTable(trades, false, true) : h("div.empty", "Insider filings are unavailable for this symbol."));
+      a.insiders.available ? insiderTable(trades, false, true) : h("div.empty", "Insider filings are unavailable for this symbol."),
+      notes.length ? h("p.small.soft", { style: "margin-top:8px" }, notes.join(" · ")) : null,
+      source);
   }
 
   function backtestCard(sym) {
@@ -815,10 +825,11 @@ function insiderTable(trades, withSymbol, compact) {
   return dataTable([
     withSymbol ? { label: "Stock", cell: (t) => h("a.sym", { href: "#/stock/" + t.symbol }, t.symbol) } : null,
     { label: "Date", cell: (t) => h("span.nowrap", fmt.date(t.date)) },
-    { label: "Insider", cell: (t) => h("div", h("div", titleCase(t.insider)), h("div.muted.small", t.position)) },
-    { label: "Trade", cell: (t) => (t.kind === "buy" ? pill("bullish", "Bought") : t.kind === "sell" ? pill("bearish", "Sold") : h("span.tag", "Other")) },
+    { label: "Insider", cell: (t) => h("div", h("div", t.insider_display || titleCase(t.insider)), h("div.muted.small", t.position)) },
+    { label: "Trade", cell: (t) => h("div.chips", t.kind === "buy" ? pill("bullish", "Bought") : t.kind === "sell" ? pill("bearish", "Sold") : h("span.tag", "Other"), insiderTags(t)) },
     compact ? null : { label: "Shares", right: true, hideSmall: true, cell: (t) => fmt.num(t.shares) },
     { label: "Value", right: true, cell: (t) => (t.value ? fmt.compact(t.value) : "—") },
+    compact ? null : { label: "", hideSmall: true, cell: (t) => (t.url ? safeLink(t.url, "Filing ↗") : "") },
   ].filter(Boolean), trades, { empty: "No open-market insider trades on record." });
 }
 
@@ -827,11 +838,11 @@ function alertsPage(root) {
   let filter = "all";
   const list = h("div");
   const chips = h("div.chips");
-  const FILTERS = [["all", "All"], ["bullish", "Buy side"], ["bearish", "Sell side"], ["warning", "Heads-up"]];
+  const FILTERS = [["all", "All"], ["insider", "Insider trades"], ["bullish", "Buy side"], ["bearish", "Sell side"], ["warning", "Heads-up"]];
 
   async function refresh() {
     const data = await api("/api/notifications?limit=300");
-    const items = data.items.filter((n) => filter === "all" || n.tone === filter);
+    const items = data.items.filter((n) => filter === "all" || (filter === "insider" ? n.kind.startsWith("insider") : n.tone === filter));
     fill(chips, FILTERS.map(([key, label]) => h("button.chip" + (filter === key ? ".on" : ""), { onclick: () => { filter = key; refresh(); } }, label)));
     fill(list, items.length ? items.map((n) => notificationItem(n)) : h("div.empty", "No alerts here yet. They appear when a signal changes, earnings approach, or an insider buys."));
   }
@@ -892,24 +903,60 @@ function earningsPage(root) {
 }
 
 /* ---- insiders ---- */
+function insiderTags(t) {
+  return [
+    t.code && t.kind === "other" ? h("span.tag", { title: t.text || "" }, t.code) : null,
+    t.plan_10b5_1 ? h("span.tag", { title: "Pre-planned under a Rule 10b5-1 trading plan" }, "10b5-1 plan") : null,
+    t.routine === "routine" ? h("span.tag", { title: "Traded in this same month in each of the last 3 years" }, "Routine") : null,
+    t.routine === "opportunistic" ? h("span.pill.bullish", { title: "Not a routine pattern for this insider" }, "Opportunistic") : null,
+  ].filter(Boolean);
+}
+
 function insidersPage(root) {
+  let scope = "market";
   let kind = "buy";
+  let minValue = 100000;
   const host = h("div");
-  const chips = h("div.chips");
+  const controls = h("div.row");
+  const banner = h("div");
+
   async function refresh() {
-    const all = await api("/api/insiders");
-    const rows = all.filter((t) => (kind === "all" ? t.kind !== "other" : t.kind === kind)).slice(0, 150);
-    fill(chips, [["buy", "Buys"], ["sell", "Sales"], ["all", "Both"]].map(([key, label]) =>
-      h("button.chip" + (kind === key ? ".on" : ""), { onclick: () => { kind = key; refresh(); } }, label)));
-    fill(host, insiderTable(rows, true));
+    const connected = state.overview && state.overview.insiders && state.overview.insiders.configured;
+    fill(banner, connected ? null : h("div.note.warn",
+      h("span", { "aria-hidden": "true" }, "!"),
+      h("span", "Live SEC filings are not connected, so you are seeing Yahoo's delayed summary and no market-wide feed. ",
+        h("a", { href: "#/settings" }, "Add your name and email in Settings"), " to get insider alerts within minutes of each filing.")));
+    const scopeChips = h("div.chips", [["market", "Whole market (live)"], ["watchlist", "My watchlist"]].map(([key, label]) =>
+      h("button.chip" + (scope === key ? ".on" : ""), { onclick: () => { scope = key; refresh(); } }, label)));
+    if (scope === "market") {
+      fill(controls, scopeChips, h("div.chips", [[0, "Any size"], [100000, "$100K+"], [500000, "$500K+"], [1000000, "$1M+"]].map(([v, label]) =>
+        h("button.chip" + (minValue === v ? ".on" : ""), { onclick: () => { minValue = v; refresh(); } }, label))));
+      const rows = await api("/api/insiders?scope=market&days=14&min_value=" + minValue);
+      fill(host, dataTable([
+        { label: "Filed", cell: (t) => h("div", h("div.nowrap", fmt.date(t.filed)), h("div.small.muted", "traded " + fmt.date(t.trade_date))) },
+        { label: "Company", cell: (t) => h("div", t.symbol ? h("a.sym", { href: "#/stock/" + t.symbol }, t.symbol) : h("span.sym", "—"), h("div.sym-name", t.issuer_name || "")) },
+        { label: "Insider", cell: (t) => h("div", h("div", t.owner_display), h("div.muted.small", t.role || "")) },
+        { label: "Bought", right: true, cell: (t) => h("div", h("div", { style: "font-weight:650" }, fmt.compact(t.value)), h("div.small.muted", fmt.num(t.shares) + " sh" + (t.avg_price ? " @ " + fmt.money(t.avg_price) : ""))) },
+        { label: "Stake", right: true, hideSmall: true, cell: (t) => (t.stake_change_pct === null || t.stake_change_pct === undefined ? "—" : "+" + fmt.num(t.stake_change_pct) + "%") },
+        { label: "", hideSmall: true, cell: (t) => h("div.chips", insiderTags(t)) },
+        { label: "", cell: (t) => safeLink(t.url, "Filing ↗") },
+      ], rows, { empty: connected ? "No open-market purchases of this size in the last 14 days of filings the app has read. The feed fills up as new filings arrive." : "Connect SEC filings in Settings to see this feed." }));
+    } else {
+      fill(controls, scopeChips, h("div.chips", [["buy", "Buys"], ["sell", "Sales"], ["all", "Both"]].map(([key, label]) =>
+        h("button.chip" + (kind === key ? ".on" : ""), { onclick: () => { kind = key; refresh(); } }, label))));
+      const all = await api("/api/insiders");
+      const rows = all.filter((t) => (kind === "all" ? t.kind !== "other" : t.kind === kind)).slice(0, 150);
+      fill(host, insiderTable(rows, true));
+    }
   }
-  fill(root, 
-    pageHead("Insider trades", "Open-market trades by executives and directors, from their public SEC filings."),
+  fill(root,
+    pageHead("Insider trades", "Open-market trades by executives and directors, from their SEC Form 4 filings."),
     h("div.stack",
-      h("div.note", "Buys matter most: insiders sell for many reasons but buy for one. Gifts, stock grants and option exercises are left out because they are not a view on the stock."),
-      chips, h("section.card", host)));
+      banner,
+      h("div.note", "Buys matter most: insiders sell for many reasons but buy for one. Purchases that are not part of a pre-planned 10b5-1 trade, by insiders without a routine pattern, and by several insiders at once have been the most informative. Gifts, grants and option exercises are left out."),
+      controls, h("section.card", host)));
   refresh();
-  return {};
+  return { refresh: () => { if (scope === "market") refresh(); } };
 }
 
 /* ---- positions ---- */
@@ -938,7 +985,9 @@ function settingsPage(root) {
   const st = state.overview.settings;
   const error = h("div.error-text", { hidden: true });
   const saved = h("span.small.up", { hidden: true }, "✓ Saved");
-  const inputs = {};
+  const inputs = {};   // numeric fields
+  const texts = {};    // text fields
+  const toggles = {};  // checkboxes
   const field = (key, label, hint, affix, step) => {
     const input = h("input", { id: "set-" + key, type: "number", step, min: 0, value: st[key], inputMode: "decimal", oninput: update });
     inputs[key] = input;
@@ -946,9 +995,57 @@ function settingsPage(root) {
     input._derived = derived;
     return h("div.field", h("label", { htmlFor: "set-" + key }, label),
       h("div.input-affix" + (affix === "$" ? "" : ".suffix"), affix === "$" ? h("span", "$") : null, input, affix !== "$" ? h("span", affix) : null),
-      h("div.hint", hint), derived);
+      hint ? h("div.hint", hint) : null, derived);
   };
-  const optionsOn = h("input", { type: "checkbox", checked: st.options_enabled });
+  const textField = (key, label, hint, placeholder, type = "text") => {
+    const input = h("input.input", { id: "set-" + key, type, value: st[key] || "", placeholder, autocomplete: "off", spellcheck: false, oninput: update });
+    texts[key] = input;
+    return h("div.field", h("label", { htmlFor: "set-" + key }, label), input, hint ? h("div.hint", hint) : null);
+  };
+  const toggle = (key, label) => {
+    const input = h("input", { type: "checkbox", checked: !!st[key], onchange: update });
+    toggles[key] = input;
+    return h("label.switch", input, label);
+  };
+  const scope = h("select.input", { id: "set-push_scope", onchange: update },
+    h("option", { value: "insider", selected: st.push_scope === "insider" }, "Insider trades only"),
+    h("option", { value: "all", selected: st.push_scope === "all" }, "Every alert"));
+
+  const insiderStatus = h("div.note", "Checking…");
+  const pushStatus = h("div.hint");
+  const pollBtn = h("button.btn.small", { onclick: async () => {
+    pollBtn.disabled = true;
+    try { await api("/api/insiders/poll", { method: "POST" }); setTimeout(loadStatus, 2500); }
+    catch (e) { insiderStatus.className = "note warn"; insiderStatus.textContent = e.message; }
+    setTimeout(() => { pollBtn.disabled = false; }, 3000);
+  } }, "Check filings now");
+  const testBtn = h("button.btn.small", { onclick: async () => {
+    testBtn.disabled = true;
+    try {
+      await api("/api/push/test", { method: "POST", body: { url: texts.push_url.value } });
+      pushStatus.className = "hint up"; pushStatus.textContent = "✓ Test sent. Check your phone.";
+    } catch (e) { pushStatus.className = "error-text"; pushStatus.textContent = e.message; }
+    testBtn.disabled = false;
+  } }, "Send a test");
+
+  async function loadStatus() {
+    try {
+      const sts = await api("/api/insiders/status");
+      if (!sts.configured) {
+        insiderStatus.className = "note warn";
+        insiderStatus.textContent = "Not connected yet. Enter your name and email above and save to start receiving SEC filings.";
+      } else if (sts.last_error) {
+        insiderStatus.className = "note warn";
+        insiderStatus.textContent = "Last check had a problem: " + sts.last_error;
+      } else {
+        insiderStatus.className = "note";
+        insiderStatus.textContent = sts.polling ? "Checking SEC filings now…" :
+          sts.last_poll ? "✓ Connected to SEC EDGAR. Last checked " + fmt.ago(sts.last_poll) + "; " + sts.filings_seen + " filings read since the app started." :
+          "✓ Connected. The first check starts in a moment.";
+      }
+      if (sts.push.last_error) { pushStatus.className = "error-text"; pushStatus.textContent = sts.push.last_error; }
+    } catch (e) { /* status is best-effort */ }
+  }
 
   const form = h("div.stack.form-narrow",
     card("Budget", "Everything is sized from this",
@@ -957,10 +1054,29 @@ function settingsPage(root) {
       field("risk_per_trade_pct", "Risk per trade", "How much of the budget you lose if a trade hits its stop. 1% is a common choice; above 2% is aggressive.", "%", 0.1),
       field("max_position_pct", "Largest single position", "Caps how much of the budget one stock can take.", "%", 1))),
     card("Options", null, h("div.stack",
-      h("label.switch", optionsOn, "Show call and put recommendations"),
+      toggle("options_enabled", "Show call and put recommendations"),
       field("option_risk_pct", "Risk per options trade", "The most one options trade may lose. A bought option can go to zero, so keep this small.", "%", 0.5))),
+    card("Insider trade alerts", "Live from SEC Form 4 filings", h("div.stack",
+      h("p.soft", "Insiders must report every trade to the SEC within two business days. The app reads those filings directly, minutes after they are published, so you hear about an insider purchase as soon as it is public."),
+      textField("sec_contact", "Your name and email for the SEC",
+        "The SEC requires every automated tool to identify itself with a contact. This is only sent to sec.gov, never anywhere else.",
+        "Jane Doe jane@example.com"),
+      insiderStatus,
+      h("div.row", pollBtn),
+      toggle("insider_market_alerts", "Also alert on big insider buys at any US company"),
+      h("div.grid-2",
+        field("insider_market_min_value", "Smallest market-wide buy to alert on", "Officers and directors only; pre-planned 10b5-1 buys are skipped.", "$", 50000),
+        field("insider_poll_minutes", "Check for new filings every", null, "minutes", 1)),
+      toggle("insider_alert_sells", "Alert on insider sales of stocks on my watchlist"),
+      field("insider_sell_min_value", "Smallest sale to alert on", "Sales are usually for taxes or diversification, so only big ones are worth a look.", "$", 100000))),
+    card("Phone notifications", "Optional", h("div.stack",
+      h("p.soft", "Get alerts on your phone even when this page is closed. The free ntfy app is the simplest option: install it, subscribe to a topic name only you know, and paste the topic link below. Discord and Slack webhook links also work."),
+      textField("push_url", "Push link", null, "https://ntfy.sh/your-secret-topic-name", "url"),
+      h("div.field", h("label", { htmlFor: "set-push_scope" }, "Send to phone"), scope),
+      h("div.row", testBtn), pushStatus,
+      h("p.muted.small", "Anyone who knows an ntfy topic name can read it, so pick a long random one."))),
     card("Updates", null,
-      field("refresh_minutes", "Check for new data every", "How often prices, news and filings are refreshed in the background.", "minutes", 1)),
+      field("refresh_minutes", "Check prices and news every", "How often prices, news and earnings are refreshed in the background.", "minutes", 1)),
     h("div.row", h("button.btn.primary", { onclick: save }, "Save settings"), saved), error);
 
   function update() {
@@ -972,17 +1088,22 @@ function settingsPage(root) {
   }
 
   async function save() {
-    const body = { options_enabled: optionsOn.checked };
+    const body = { push_scope: scope.value };
+    for (const [key, input] of Object.entries(toggles)) body[key] = input.checked;
     for (const [key, input] of Object.entries(inputs)) body[key] = Number(input.value);
+    for (const [key, input] of Object.entries(texts)) body[key] = input.value.trim();
     try {
       await api("/api/settings", { method: "PUT", body });
       error.hidden = true; saved.hidden = false;
       await refreshOverview();
+      setTimeout(loadStatus, 2500);
     } catch (e) { error.hidden = false; error.textContent = e.message.replace(/_/g, " "); }
   }
 
-  fill(root, pageHead("Settings", "Your budget and how much risk each trade may take."), form);
+  fill(root, pageHead("Settings", "Your budget, how much risk each trade may take, and where alerts go."), form);
   update();
+  loadStatus();
+  const timer = setInterval(() => { if (document.body.contains(insiderStatus)) loadStatus(); else clearInterval(timer); }, 15000);
   return {};
 }
 

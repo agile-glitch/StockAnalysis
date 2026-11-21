@@ -67,8 +67,10 @@ for taxes, diversification and pre-scheduled 10b5-1 plans.
 **Used as:** buys score positive and cluster buys (3+ insiders in 90 days) score
 highest; sales score only slightly negative; gifts, grants and option exercises
 are ignored. Every insider purchase in the last 14 days triggers an alert.
-The app does not yet separate routine from opportunistic insiders, which would
-need several years of each insider's filing history.
+With SEC alerts connected, each purchase is checked against the insider's own
+filings: buys under a 10b5-1 plan are not counted, and routine buyers (same
+calendar month in each of the past three years) count half. See
+[INSIDER_ALERTS.md](INSIDER_ALERTS.md).
 
 - NBER paper: https://www.nber.org/papers/w16454
 
