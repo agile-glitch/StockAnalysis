@@ -72,6 +72,33 @@ network), `--no-browser`.
   largest position, options on/off, options risk per trade, refresh interval.
   Changing the budget immediately resizes every trade plan and options idea.
 
+## Does it work? The track record
+
+The rules were replayed day by day on 20+ years of prices for about 190 large
+US stocks, with costs, no peeking ahead, and separate stocks and years held
+back for testing. Full results are on the app's **Track record** page and in
+[docs/VALIDATION.md](docs/VALIDATION.md). In short:
+
+- Every version of the rules made money in every period.
+- The per-stock Buy and Sell ratings did **not** beat the market: new Buy
+  signals beat the S&P 500 about half the time.
+- What held up was **market-level risk control**: holding less stock when the
+  whole market is in a downtrend or very turbulent roughly halved the worst
+  losses (−35% instead of −55% on unseen stocks, 2006–2026), with a similar
+  return per unit of risk.
+- It did **not** make more money than staying invested: about 9.4% a year
+  against 12.1%, mostly from missing fast rebounds.
+
+So the dashboard leads with a **Market risk** indicator (a suggested share of
+your budget in stocks, with an alert when the market turns), and the stock
+ratings are best read as information, not as a proven trading system.
+
+To rerun the test (downloads about 190 price histories the first time):
+
+```bash
+python -m stockanalysis.validation
+```
+
 ## How the signal is built
 
 | Rule | Points |
@@ -108,6 +135,8 @@ stockanalysis/
   engine.py                 analysis, notifications, background scheduler
   db.py                     SQLite: settings, watchlist, positions, alerts
   server.py                 HTTP API (FastAPI)
+  market.py                 market risk indicator (the rule that held up)
+  validation/               historical test: replay, signal study, portfolio, walk-forward
   sec.py                    SEC EDGAR client and Form 4 parser
   insiders.py               live insider-trade watcher and alerts
   push.py                   phone push (ntfy, Discord, Slack)
@@ -115,6 +144,7 @@ stockanalysis/
   static/                   web interface (no build step)
 docs/STRATEGIES.md          research behind the rules
 docs/INSIDER_ALERTS.md      how to get insider-trade alerts, compared
+docs/VALIDATION.md          the historical test results (generated)
 tests/                      pytest suite (runs offline on demo data)
 ```
 
@@ -139,4 +169,6 @@ python -m pytest
 - Without an SEC contact, insider data falls back to Yahoo's delayed summary.
   The market-wide insider feed only covers filings published while the app is
   running. Form 144 and congressional trades are not tracked.
-- The backtest covers only the price rules and ignores costs and taxes.
+- The historical test covers the price rules and earnings surprises; insider
+  trades, news tone and options could not be replayed. Only companies still
+  listed today could be downloaded, which flatters all long-only results.

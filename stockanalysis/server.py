@@ -225,6 +225,16 @@ def create_app(db: Database | None = None, provider: CachedProvider | None = Non
             return insider_service.market_buys(days=max(1, min(days, 90)), min_value=max(0.0, min_value))
         return engine.insider_feed()
 
+    @app.get("/api/validation")
+    def validation():
+        from .validation.run import BUNDLED_REPORT, REPORT_DIR
+        path = REPORT_DIR / "report.json"
+        if not path.exists():
+            path = BUNDLED_REPORT   # the copy shipped with the app
+        if not path.exists():
+            raise HTTPException(404, "No track record yet. Run: python -m stockanalysis.validation")
+        return FileResponse(path, media_type="application/json", headers={"Cache-Control": "no-cache"})
+
     @app.get("/api/insiders/status")
     def insider_status():
         settings = db.get_settings()

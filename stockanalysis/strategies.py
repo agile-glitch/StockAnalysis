@@ -115,8 +115,9 @@ def trend_signal(r) -> Signal:
         else f"Downtrend: {_pct(gap)} below the 200-day average"
     )
     detail = (
-        "Stocks above their 200-day average have historically had better returns and "
-        "far smaller drawdowns than stocks below it. Below the line, new buys are blocked."
+        "Trend filters have historically cut losses in long declines. In this app's own 20-year "
+        "test it worked best on the whole market rather than for picking single stocks. "
+        "Below the line, new buys are blocked."
     )
     return Signal("trend", name, cat, _clip(score), WEIGHTS["trend"], headline, detail)
 
@@ -128,8 +129,9 @@ def momentum_signal(r) -> Signal:
         return _unavailable("momentum", name, cat, "Needs a full year of price history")
     headline = f"{_pct(m)} over the past year (skipping the last month)"
     detail = (
-        "Winners of the past 3-12 months tend to keep outperforming for several more "
-        "months. The most recent month is skipped because it tends to reverse."
+        "Winners of the past 3-12 months have tended to keep outperforming for a few more "
+        "months, though the effect is weak among large companies in recent years. "
+        "The most recent month is skipped because it tends to reverse."
     )
     return Signal("momentum", name, cat, _clip(m / 0.30), WEIGHTS["momentum"], headline, detail)
 

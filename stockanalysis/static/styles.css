@@ -316,3 +316,5 @@ tbody tr.click:hover { background: var(--surface-2); }
   .signal { grid-template-columns: minmax(0, 1fr); gap: 4px; }
   .hide-sm { display: none; }
 }
+
+.market-bar .meter-track::after { display: none; }

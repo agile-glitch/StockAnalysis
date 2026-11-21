@@ -319,6 +319,7 @@ const NAV = [
   ["earnings", "Earnings"],
   ["insiders", "Insider trades"],
   ["positions", "Positions"],
+  ["track", "Track record"],
   ["guide", "Strategy guide"],
   ["settings", "Settings"],
 ];
@@ -463,6 +464,31 @@ function pageHead(title, subtitle, ...right) {
   return h("div.page-head", h("div", h("h1", title), subtitle ? h("p", subtitle) : null), h("div.row", right));
 }
 
+/* ---- market risk indicator ---- */
+function marketCard(m, budget) {
+  if (!m) return null;
+  const share = m.exposure_pct / 100;
+  const bar = h("div.meter-track", { style: "width:100%;height:8px" });
+  const fillBar = h("div.meter-fill.pos", { style: "left:0;width:" + m.exposure_pct + "%;background:var(--accent)" });
+  bar.append(fillBar);
+  const check = (ok, text) => h("li", h("span", { style: "font-weight:700;margin-right:6px", class: ok ? "up" : "down" }, ok ? "✓" : "✗"), text);
+  return h("section.card",
+    h("div.card-head",
+      h("div.row", h("h2", "Market risk"), pill(m.tone, m.state)),
+      h("a.small", { href: "#/track" }, "Why this rule? See the track record")),
+    h("div.grid-2", { style: "align-items:center" },
+      h("div",
+        h("div.muted.small", "Suggested share of your budget in stocks"),
+        h("div", { style: "font-size:28px;font-weight:650;margin:2px 0 6px" }, m.exposure_pct + "% ", h("span.soft", { style: "font-size:16px;font-weight:500" }, "≈ " + fmt.money0(budget * share))),
+        h("div.market-bar", bar),
+        h("p.soft.small", { style: "margin-top:8px" }, m.headline)),
+      h("ul.small", { style: "margin:0;padding-left:4px;list-style:none;display:grid;gap:4px" },
+        check(m.above_200, "S&P 500 " + (m.pct_from_200 >= 0 ? m.pct_from_200 + "% above" : Math.abs(m.pct_from_200) + "% below") + " its 200-day average"),
+        check(m.momentum_ok, "12-month return " + fmt.pct(m.mom12_pct) + " vs " + m.tbill_pct.toFixed(1) + "% for T-bills"),
+        check(m.vol20_pct <= m.vol_target_pct * 1.1, "Recent swings " + m.vol20_pct.toFixed(0) + "% a year (comfort level " + m.vol_target_pct + "%)"))),
+    h("p.muted.small", { style: "margin-top:8px" }, "This was the only part of the rules that held up in 20 years of testing: it roughly halved crash losses, but trailed always-invested by about 2–3% a year. Individual Buy/Sell ratings did not beat the market."));
+}
+
 /* ---- dashboard ---- */
 function dashboardPage(root) {
   const tiles = h("div.tiles");
@@ -503,14 +529,16 @@ function dashboardPage(root) {
   input.addEventListener("blur", () => setTimeout(() => { suggestions.hidden = true; }, 200));
   const addBtn = h("button.btn.primary", { onclick: () => add() }, "Add to watchlist");
 
-  fill(root, 
+  const marketHost = h("div");
+  fill(root,
     pageHead("Dashboard", "Your watchlist, scored by the trading rules and sized to your budget.",
       h("div.search-wrap", input, suggestions), addBtn),
-    error, h("div.stack", tiles, h("section.card", tableHost)));
+    error, h("div.stack", marketHost, tiles, h("section.card", tableHost)));
 
   function refresh() {
     const o = state.overview;
     if (!o) return;
+    fill(marketHost, marketCard(o.market, o.budget.total));
     const live = o.watchlist.filter((w) => !w.error && !w.pending);
     const buys = live.filter((w) => w.direction === "bullish").length;
     const sells = live.filter((w) => w.direction === "bearish").length;
@@ -751,7 +779,7 @@ function stockPage(root, symbol) {
       if (!b.available) { fill(body, h("div.empty", b.reason)); return; }
       const chart = lineChart({
         dates: b.curve.dates, height: 220, label: "Growth of 100 dollars: rules versus buy and hold",
-        yFormat: (v) => "$" + Math.round(v).toLocaleString("en-US"),
+        yFormat: (v) => "$" + (Math.round(v) || 0).toLocaleString("en-US"),
         series: [
           { name: "Following the rules", color: "var(--series-1)", values: b.curve.strategy },
           { name: "Buy and hold", color: "var(--series-2)", values: b.curve.buy_hold },
@@ -1107,6 +1135,227 @@ function settingsPage(root) {
   return {};
 }
 
+/* ---- track record (historical validation) ---- */
+const CELL_LABELS = {
+  train_2015_now: ["Later years", "Same stocks, 2015 to today: years the rules were never tuned on"],
+  holdout_2015_now: ["Unseen stocks, recent", "Different stocks, 2015 to today"],
+  holdout_2003_2014: ["Unseen stocks, 2003–2014", "Different stocks through the 2008 crash"],
+  train_2003_2014: ["Training data", "The stocks and years used to choose between rule variants"],
+};
+
+function trackRecordPage(root) {
+  let cell = "train_2015_now";
+  let which = "chosen";
+  let report = null;
+  const body = h("div.stack");
+  fill(root, pageHead("Track record", "The rules replayed day by day on 20+ years of past prices, then checked against what happened next, on stocks and years they were not tuned on."), body);
+
+  const check = (ok, label) => h("div.row", { style: "gap:8px" },
+    h("span.pill." + (ok ? "bullish" : "bearish"), ok ? "✓ Yes" : "✗ No"), h("span", label));
+  const pct = (x, digits = 1) => (x === null || x === undefined ? "—" : fmt.pct(x, digits));
+
+  function render() {
+    const r = report;
+    const port = r.portfolio[which][cell];
+    const study = r.signal_study[cell];
+    const v = r.verdict[which][cell];
+    const rules = which === "chosen" ? r.chosen_rules : r.baseline_rules;
+    const testCells = r.design.test_cells;
+    const passed = testCells.filter((c) => r.verdict[which][c].holds_up).length;
+
+    const cellChips = h("div.chips", Object.entries(CELL_LABELS).map(([key, [label]]) =>
+      h("button.chip" + (cell === key ? ".on" : ""), { onclick: () => { cell = key; render(); } }, label)));
+    const rulesChips = h("div.chips", [["chosen", "Best rules: " + r.chosen_rules.name], ["baseline", "Original app rules"]].map(([key, label]) =>
+      h("button.chip" + (which === key ? ".on" : ""), { onclick: () => { which = key; render(); } }, label)));
+
+    const summary = h("section.card",
+      h("div.card-head", h("h2", "Does it hold up?"), h("p", "Judged only on data the rules were not tuned on")),
+      h("p", { style: "font-size:15px" }, h("strong", passed + " of " + testCells.length), " test periods pass every check for ", h("strong", rules.name), "."),
+      h("div.table-wrap", { style: "margin-top:10px" }, h("table",
+        h("thead", h("tr", h("th", "Test"), h("th", "Buy signals beat the market"), h("th", "Made money"), h("th", "Beat buy-and-hold"), h("th", "Overall"))),
+        h("tbody", testCells.map((c) => {
+          const vv = r.verdict[which][c];
+          const mark = (ok) => h("td", h("span.pill." + (ok ? "bullish" : "bearish"), ok ? "✓" : "✗"));
+          return h("tr", h("td", CELL_LABELS[c][0]), mark(vv.buy_signals_beat_market), mark(vv.profitable), mark(vv.beats_buy_and_hold), mark(vv.holds_up));
+        })))),
+      h("p.muted.small", { style: "margin-top:8px" }, "Beat buy-and-hold means a better Sharpe ratio (return per unit of risk) than holding the same stocks, or a third smaller worst drop while keeping at least 60% of the yearly return."));
+
+    const s = port.strategy, spy = port.spy, ew = port.equal_weight;
+    const chart = lineChart({
+      dates: port.curve.dates, height: 260, label: "Growth of $100",
+      yFormat: (x) => "$" + (Math.round(x) || 0).toLocaleString("en-US"),
+      series: [
+        { name: "Following the rules", color: "var(--series-1)", values: port.curve.strategy },
+        { name: "S&P 500 (SPY)", color: "var(--series-2)", values: port.curve.spy },
+        { name: "Buy and hold the same stocks", color: "var(--series-3)", values: port.curve.equal_weight },
+      ],
+    });
+    const row = (label, key, f = pct) => h("tr", h("td", label), [s, spy, ew].map((m) => h("td.r.num", f(m[key]))));
+    const portfolioCard = h("section.card",
+      h("div.card-head", h("h2", "Portfolio: $100,000 following the rules"), h("p", CELL_LABELS[cell][1])),
+      chart.legend, h("div", { style: "margin-top:8px" }, chart.node),
+      h("div.table-wrap", { style: "margin-top:12px" }, h("table",
+        h("thead", h("tr", h("th", ""), h("th.r", "Rules"), h("th.r", "S&P 500"), h("th.r", "Hold same stocks"))),
+        h("tbody",
+          row("Yearly return", "cagr_pct", (x) => pct(x, 1)),
+          row("Total return", "total_return_pct", (x) => pct(x, 0)),
+          row("Worst drop", "max_drawdown_pct"),
+          row("Sharpe ratio", "sharpe", (x) => (x === null || x === undefined ? "—" : x.toFixed(2))),
+          row("Volatility", "volatility_pct", (x) => (x === null || x === undefined ? "—" : x.toFixed(1) + "%"))))),
+      h("div.metrics", { style: "margin-top:12px" },
+        h("div.metric", h("div.k", "Trades"), h("div.v", fmt.num(s.trades))),
+        h("div.metric", h("div.k", "Winning trades"), h("div.v", s.win_rate_pct + "%")),
+        h("div.metric", h("div.k", "Average win"), h("div.v", pct(s.avg_win_pct))),
+        h("div.metric", h("div.k", "Average loss"), h("div.v", pct(s.avg_loss_pct))),
+        h("div.metric", h("div.k", "Profit factor"), h("div.v", s.profit_factor ?? "—")),
+        h("div.metric", h("div.k", "Days held (avg)"), h("div.v", s.avg_days_held)),
+        h("div.metric", h("div.k", "Time invested"), h("div.v", s.invested_pct + "%"))),
+      h("p.muted.small", { style: "margin-top:8px" }, "Includes " + r.design.cost_bps_per_side + " basis points of cost on every buy and sell. Profit factor is total gains divided by total losses."));
+
+    const ev = study.events;
+    const signalTable = (kind) => dataTable([
+      { label: "Held for", cell: (e) => ({ 5: "1 week", 20: "1 month", 60: "3 months", 120: "6 months" }[e.horizon]) },
+      { label: "Signals", right: true, cell: (e) => fmt.num(e.signals) },
+      { label: kind === "buy" ? "Beat the market" : "Lagged the market", right: true, cell: (e) => h("strong", e.win_rate + "%") },
+      { label: "Avg vs market", right: true, cell: (e) => h("span." + signClass(kind === "buy" ? e.avg_excess : -e.avg_excess), pct(e.avg_excess, 2)) },
+      { label: "Stock went up", right: true, hideSmall: true, cell: (e) => e.rose_rate + "%" },
+      { label: "Confidence (t)", right: true, hideSmall: true, cell: (e) => (e.t_stat === null ? "—" : e.t_stat.toFixed(1)) },
+    ], ev.filter((e) => e.kind === kind));
+    const states = dataTable([
+      { label: "When the app said", cell: (x) => pill(x.state === "buy" ? "bullish" : x.state === "sell" ? "bearish" : "neutral", x.state[0].toUpperCase() + x.state.slice(1)) },
+      { label: "Stock-days", right: true, cell: (x) => fmt.num(x.stock_days) },
+      { label: "Next month vs market", right: true, cell: (x) => h("span." + signClass(x.avg_excess_20d), pct(x.avg_excess_20d, 2)) },
+      { label: "Beat the market", right: true, cell: (x) => x.beat_market + "%" },
+    ], study.states);
+    const signalCard = h("section.card",
+      h("div.card-head", h("h2", "Signals: what happened after the app said Buy or Sell"), h("p", CELL_LABELS[cell][1])),
+      h("h3", { style: "margin:4px 0 6px" }, "Each new Buy signal"), signalTable("buy"),
+      h("h3", { style: "margin:14px 0 6px" }, "Each new Sell signal"), signalTable("sell"),
+      h("h3", { style: "margin:14px 0 6px" }, "Every day, by signal"), states,
+      h("p.muted.small", { style: "margin-top:8px" }, "Entered at the next day's open, compared with the S&P 500 over the same days. Confidence above about 2 means the result is unlikely to be luck; it treats each month as one observation because signals bunch together."));
+
+    const years = Object.keys(port.yearly.strategy);
+    const yearCard = h("section.card",
+      h("div.card-head", h("h2", "Year by year")),
+      dataTable([
+        { label: "Year", cell: (y) => y },
+        { label: "Rules", right: true, cell: (y) => h("span." + signClass(port.yearly.strategy[y]), pct(port.yearly.strategy[y])) },
+        { label: "S&P 500", right: true, cell: (y) => pct(port.yearly.spy[y]) },
+        { label: "Hold same stocks", right: true, cell: (y) => pct(port.yearly.equal_weight[y]) },
+        { label: "Buy signals beat market (3 mo)", right: true, hideSmall: true, cell: (y) => {
+          const b = study.buy_60d_by_year[y]; return b ? b.win_rate + "% of " + b.signals : "—"; } },
+      ], years.slice().reverse()));
+
+    const searchCard = h("section.card",
+      h("div.card-head", h("h2", "Rule variants tried"), h("p", "Training data only (" + r.design.train + "). The best is then tested once on the other periods.")),
+      dataTable([
+        { label: "Variant", cell: (x) => h("div", h("div", { style: x.name === r.chosen_rules.name ? "font-weight:700" : "" }, x.name, x.name === r.chosen_rules.name ? h("span.tag", { style: "margin-left:6px" }, "Chosen") : null), x.notes ? h("div.small.muted", x.notes) : null) },
+        { label: "Yearly", right: true, cell: (x) => pct(x.cagr_pct) },
+        { label: "Worst drop", right: true, cell: (x) => pct(x.max_drawdown_pct) },
+        { label: "Sharpe", right: true, cell: (x) => (x.sharpe ?? "—") },
+        { label: "Trades", right: true, hideSmall: true, cell: (x) => fmt.num(x.trades) },
+        { label: "Win rate", right: true, hideSmall: true, cell: (x) => x.win_rate_pct + "%" },
+      ], r.search.slice().sort((a, b) => (b.sharpe ?? -9) - (a.sharpe ?? -9))));
+
+    const caveats = h("section.card", h("h2", "What this test cannot tell you"),
+      h("ul.small.soft", { style: "margin:8px 0 0;padding-left:18px" },
+        h("li", "Only stocks that still exist today could be downloaded, so companies that went bust are missing. That flatters every long-only result, including buy-and-hold."),
+        h("li", "Insider trades and news tone are not replayed (no free history). They are 25 of the score's 100 points in the live app."),
+        h("li", "Options ideas are not tested: free historical option prices do not exist."),
+        h("li", "Past results do not guarantee future ones, and markets change once rules become popular.")),
+      h("p.muted.small", { style: "margin-top:8px" }, "Run on " + new Date(r.generated).toLocaleString() + ". Rerun with: python -m stockanalysis.validation"));
+
+    fill(body, ...storyCards(r), h("h2", { style: "margin-top:12px;font-size:18px" }, "Round 1 in detail: the app's own Buy and Sell rules"),
+      h("div.row", rulesChips), summary, h("div.row", cellChips), portfolioCard, signalCard, yearCard, searchCard, caveats);
+  }
+
+  function storyCards(r) {
+    const wf = r.walk_forward;
+    const exam = r.final_exam;
+    const cards = [];
+    if (wf) {
+      const ex = wf.panels.exam_stocks, sp = wf.panels.sp500;
+      cards.push(h("section.card",
+        h("div.card-head", h("h2", "Bottom line")),
+        h("ul", { style: "margin:4px 0 0;padding-left:18px;display:grid;gap:6px" },
+          h("li", h("strong", "Every version of the rules made money"), " in every period tested."),
+          h("li", h("strong", "Individual Buy and Sell ratings did not beat the market."), " New Buy signals beat the S&P 500 about half the time, like a coin flip, across " +
+            fmt.num(r.signal_study.train_2015_now.events.find((e) => e.kind === "buy" && e.horizon === 60).signals) + "+ signals per period."),
+          h("li", h("strong", "Market risk control held up."), " Stepping back when the whole market was in a downtrend or very turbulent cut the worst loss from " +
+            ex.buy_and_hold.max_drawdown_pct + "% to " + ex.walk_forward.max_drawdown_pct + "% on stocks the rules never saw, with a similar return per unit of risk (Sharpe " +
+            ex.walk_forward.sharpe + " vs " + ex.buy_and_hold.sharpe + ")."),
+          h("li", h("strong", "It did not make more money than holding."), " It earned " + ex.walk_forward.cagr_pct + "% a year against " + ex.buy_and_hold.cagr_pct +
+            "% for always staying invested, because it missed some fast rebounds (2019, 2020, 2023)."),
+          h("li", "So the app now shows a ", h("a", { href: "#/dashboard" }, "market risk indicator"), " with a suggested share of your budget in stocks, and treats single-stock ratings as information rather than a trading system."))));
+
+      const chart = lineChart({
+        dates: ex.curve.dates, height: 260, label: "Growth of $100, walk-forward versus buy and hold",
+        yFormat: (x) => "$" + (Math.round(x) || 0).toLocaleString("en-US"),
+        series: [
+          { name: "Market risk rule (walk-forward)", color: "var(--series-1)", values: ex.curve.walk_forward },
+          { name: "Always invested", color: "var(--series-2)", values: ex.curve.buy_and_hold },
+        ],
+      });
+      const metricsRow = (label, a, b, f) => h("tr", h("td", label), h("td.r.num", f(a)), h("td.r.num", f(b)));
+      const pct1 = (x) => fmt.pct(x, 1);
+      const picks = Object.entries(wf.picks);
+      const yearsWF = Object.keys(ex.yearly.walk_forward).reverse();
+      cards.push(h("section.card",
+        h("div.card-head", h("h2", "Walk-forward: the market risk rule, chosen in real time"),
+          h("p", "Each year's rule was picked using only earlier years, then applied to " + exam.symbols.length + " stocks never used for tuning")),
+        chart.legend, h("div", { style: "margin-top:8px" }, chart.node),
+        h("div.grid-2", { style: "margin-top:12px" },
+          h("div.table-wrap", h("table",
+            h("thead", h("tr", h("th", "Unseen stocks, " + ex.walk_forward.years + " years"), h("th.r", "Rule"), h("th.r", "Always invested"))),
+            h("tbody",
+              metricsRow("Yearly return", ex.walk_forward.cagr_pct, ex.buy_and_hold.cagr_pct, pct1),
+              metricsRow("Worst drop", ex.walk_forward.max_drawdown_pct, ex.buy_and_hold.max_drawdown_pct, pct1),
+              metricsRow("Sharpe ratio", ex.walk_forward.sharpe, ex.buy_and_hold.sharpe, (x) => x.toFixed(2)),
+              metricsRow("Volatility", ex.walk_forward.volatility_pct, ex.buy_and_hold.volatility_pct, (x) => x.toFixed(1) + "%"),
+              metricsRow("S&P 500 alone: yearly", sp.walk_forward.cagr_pct, sp.buy_and_hold.cagr_pct, pct1),
+              metricsRow("S&P 500 alone: worst drop", sp.walk_forward.max_drawdown_pct, sp.buy_and_hold.max_drawdown_pct, pct1)))),
+          h("div.table-wrap", h("table",
+            h("thead", h("tr", h("th", "Year"), h("th.r", "Rule"), h("th.r", "Always invested"), h("th.hide-sm", "Rule in use"))),
+            h("tbody", yearsWF.map((y) => h("tr", h("td", y),
+              h("td.r.num", h("span." + signClass(ex.yearly.walk_forward[y]), pct1(ex.yearly.walk_forward[y]))),
+              h("td.r.num", pct1(ex.yearly.buy_and_hold[y])),
+              h("td.small.soft.hide-sm", wf.picks[y] || "—"))))))),
+        h("p.muted.small", { style: "margin-top:8px" }, "Candidates: " + wf.candidates.map((c) => c.name).join(", ") +
+          ". The candidate list was written after seeing the round 2 final exam; the year-by-year choices were not.")));
+    }
+    if (exam) {
+      const rules = r.round2.chosen_rules;
+      cards.push(h("section.card",
+        h("div.card-head", h("h2", "Final exam: round 2's pick on " + exam.symbols.length + " untouched stocks"), h("p", rules.name)),
+        h("p.soft", rules.notes),
+        dataTable([
+          { label: "Period", cell: (k) => (k === "exam_2003_2014" ? "2003–2014" : "2015–today") },
+          { label: "Rule: yearly", right: true, cell: (k) => fmt.pct(exam.cells[k].portfolio.strategy.cagr_pct) },
+          { label: "Rule: worst drop", right: true, cell: (k) => fmt.pct(exam.cells[k].portfolio.strategy.max_drawdown_pct) },
+          { label: "Hold same: yearly", right: true, cell: (k) => fmt.pct(exam.cells[k].portfolio.equal_weight.cagr_pct) },
+          { label: "Hold same: worst drop", right: true, cell: (k) => fmt.pct(exam.cells[k].portfolio.equal_weight.max_drawdown_pct) },
+          { label: "Original rules: yearly", right: true, hideSmall: true, cell: (k) => fmt.pct(exam.cells[k].baseline.cagr_pct) },
+          { label: "Holds up?", cell: (k) => (exam.cells[k].verdict.holds_up ? h("span.pill.bullish", "✓ Yes") : h("span.pill.bearish", "✗ No")) },
+        ], Object.keys(exam.cells)),
+        h("p.muted.small", { style: "margin-top:8px" }, "Round 2 compared " + r.round2.rows.length + " ideas on every period already seen and picked the most consistent one before this exam was run once.")));
+      cards.push(h("section.card",
+        h("div.card-head", h("h2", "Round 2 ideas"), h("p", "Advantage = Sharpe ratio minus that of holding the same stocks, across the four periods already seen")),
+        dataTable([
+          { label: "Idea", cell: (x) => h("div", h("div", { style: x.name === r.round2.chosen_rules.name ? "font-weight:700" : "" }, x.name,
+            x.name === r.round2.chosen_rules.name ? h("span.tag", { style: "margin-left:6px" }, "Chosen") : null), x.notes ? h("div.small.muted", x.notes) : null) },
+          { label: "Median advantage", right: true, cell: (x) => h("span." + signClass(x.median_sharpe_edge), (x.median_sharpe_edge > 0 ? "+" : "") + x.median_sharpe_edge.toFixed(2)) },
+          { label: "Worst period", right: true, cell: (x) => (x.worst_sharpe_edge > 0 ? "+" : "") + x.worst_sharpe_edge.toFixed(2) },
+          { label: "Always profitable", cell: (x) => (x.always_profitable ? "Yes" : "No") },
+        ], r.round2.rows.slice().sort((a, b) => b.median_sharpe_edge - a.median_sharpe_edge))));
+    }
+    return cards;
+  }
+
+  api("/api/validation").then((r) => { report = r; render(); })
+    .catch((e) => fill(body, h("section.card", h("div.empty", e.message))));
+  return {};
+}
+
 /* ---- strategy guide ---- */
 const GUIDE = [
   { title: "1. Only buy what is already going up (trend filter)", weight: "25 points, plus a hard rule",
@@ -1139,6 +1388,9 @@ function guidePage(root) {
   fill(root, 
     pageHead("Strategy guide", "The rules behind every signal, and the research they come from."),
     h("div.stack.guide",
+      h("div.note.warn", h("span", h("strong", "What our own test found: "),
+        "replayed on 190 large US stocks over 20+ years, the Buy and Sell ratings below did not beat the market on their own; the published effects are weaker among large, heavily traded companies today. What did hold up was applying the trend and volatility rules to the whole market, shown as Market risk on the dashboard. ",
+        h("a", { href: "#/track" }, "See the track record"), ".")),
       h("div.note", "No rule gets the timing right every time. These were picked because independent research supports them, and they are combined so that no single signal can trigger a trade. Each stock page shows how the price rules would have done on that stock."),
       GUIDE.map((g) => h("section.card", h("div.card-head", h("h2", g.title), h("p", g.weight)), h("p", g.text),
         g.sources.length ? h("div.sources", "Sources: ", g.sources.map(([name, url], i) => [i ? " · " : "", safeLink(url, name)])) : null)),
@@ -1150,7 +1402,7 @@ function guidePage(root) {
 /* ------------------------------ router & polling ------------------------------ */
 const ROUTES = {
   dashboard: dashboardPage, alerts: alertsPage, news: newsPage, earnings: earningsPage,
-  insiders: insidersPage, positions: positionsPage, settings: settingsPage, guide: guidePage,
+  insiders: insidersPage, positions: positionsPage, settings: settingsPage, guide: guidePage, track: trackRecordPage,
 };
 
 function mountRoute() {

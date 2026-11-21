@@ -58,6 +58,7 @@ class Engine:
         self._scan_lock = threading.Lock()
         self._backtests: dict[tuple, dict] = {}
         self.status = {"scanning": False, "last_scan": None, "last_error": None}
+        self.market: dict | None = None
 
     def today(self) -> date:
         return self._today_fn()
@@ -122,6 +123,16 @@ class Engine:
         plan = plan_trade(price, float(last["atr14"]), decision["action"], settings, cash,
                           position=position, chandelier=float(last["chandelier"]))
 
+        market = self.market
+        if market and decision["action"] in ("buy", "strong_buy") and not position:
+            if not market["risk_on"]:
+                plan["notes"].append(
+                    "The overall market is in a downtrend. In the historical test, stepping aside in market "
+                    "downtrends cut crash losses by about half; consider waiting.")
+            elif market["exposure_pct"] < 90:
+                plan["notes"].append(
+                    f"The market is turbulent: the market risk indicator suggests keeping about "
+                    f"{market['exposure_pct']}% of your budget in stocks, so consider a smaller position.")
         if (decision["action"] in ("buy", "strong_buy") and not position
                 and not math.isnan(last["chandelier"]) and last["close"] < last["chandelier"]):
             plan["notes"].append(
@@ -354,6 +365,7 @@ class Engine:
             self.status.update({"scanning": True, "last_error": None})
             if force:
                 self.provider.invalidate()
+            self.update_market(notify)
             symbols = self.db.watchlist()
             for stale in [s for s in self.analyses if s not in symbols]:
                 del self.analyses[stale]
@@ -367,6 +379,38 @@ class Engine:
             self.status["scanning"] = False
             self._scan_lock.release()
         return self.status
+
+    def update_market(self, notify: bool = True):
+        """Refresh the market risk indicator and alert when it flips."""
+        from .market import market_regime
+        try:
+            spy = self.provider.history("SPY", "2y")
+        except Exception as exc:
+            log.warning("Market indicator unavailable: %s", exc)
+            return
+        tbill = None
+        try:
+            tbill = self.provider.history("^IRX", "2y")["close"]
+        except Exception:
+            pass  # falls back to a typical T-bill rate
+        market = market_regime(spy, tbill)
+        if not market:
+            return
+        self.market = market
+        previous = self.db.get_state("market_risk_on")
+        if previous is not None and previous != market["risk_on"] and notify:
+            if market["risk_on"]:
+                title, body = "Market turned risk-on", (
+                    "The S&P 500 is back above its 200-day average or beating T-bills over 12 months. "
+                    f"The indicator suggests about {market['exposure_pct']}% of your budget in stocks.")
+            else:
+                title, body = "Market turned risk-off", (
+                    "The S&P 500 is below its 200-day average and lagging T-bills over 12 months. In the "
+                    "historical test, moving to cash at this point cut crash losses by about half, "
+                    "at the cost of missing some fast rebounds.")
+            self.db.add_notification(symbol=None, kind="market_regime", tone=market["tone"], title=title, body=body,
+                                     dedup_key=f"market_regime:{market['as_of']}:{market['risk_on']}")
+        self.db.set_state("market_risk_on", market["risk_on"])
 
     def _safe_refresh(self, symbol: str, notify: bool = True) -> dict:
         try:
@@ -425,6 +469,7 @@ class Engine:
                 "last_error": self.insiders.status["last_error"] if self.insiders else None,
             },
             "status": self.status,
+            "market": self.market,
             "demo": self.provider.is_demo,
         }
 
