@@ -542,6 +542,47 @@ function pineModal(tactic, params, label) {
 }
 
 /* ---- market risk indicator ---- */
+function profitCard(p, reload) {
+  const pct1 = (x) => fmt.pct(x, 1);
+  const choices = [["off", "Off"], ...Object.entries(p.options).map(([k, o]) => [k, o.label + (k === p.chosen_by_test ? " (tested pick)" : "")])];
+  const picker = h("div.chips", choices.map(([k, label]) => h("button.chip" + (p.plan === k ? ".on" : ""), {
+    onclick: async () => {
+      try { await api("/api/settings", { method: "PUT", body: { profit_plan: k } }); reload(); }
+      catch (err) { toast({ title: "Could not change the plan", body: err.message, tone: "warning" }); }
+    } }, label)));
+  const head = h("div.card-head", h("h2", "Profit plan"), h("p", "The approach that made the most money in 65 years of testing, as a live instruction"));
+  if (p.plan === "off" || !p.options[p.plan]) {
+    return h("section.card", head, picker, h("p.soft", { style: "margin-top:8px" }, "Pick a plan to get a clear instruction and an alert whenever it changes."));
+  }
+  const o = p.options[p.plan], st = p.state, t = o.tested || {};
+  const long = t.sp_long, fund = t.spy;
+  const row = (name, x, hold) => h("tr", h("td", name),
+    h("td.r.num", h("strong", pct1(x.cagr_pct)), h("span.muted", " vs " + pct1(hold.cagr_pct))),
+    h("td.r.num", h("strong", fmt.pct(x.max_drawdown_pct, 0)), h("span.muted", " vs " + fmt.pct(hold.max_drawdown_pct, 0))));
+  const now = !st ? h("div.empty", p.error || "Waiting for S&P 500 data.") : h("div.row", { style: "gap:14px;align-items:flex-start;flex-wrap:wrap" },
+    h("div", { style: "min-width:220px;flex:1" },
+      h("div.small.muted", "Do now (as of the " + fmt.date(st.as_of) + " close)"),
+      h("div", { style: "font-size:20px;font-weight:700;margin:2px 0 4px" }, st.invested ? "Hold " + st.fund : "Hold T-bills (" + st.cash_fund + ")"),
+      h("div.soft", st.action),
+      h("div.small.muted", { style: "margin-top:4px" }, "Since " + fmt.date(st.since) + ". You get an alert the day it changes; trade at the next close.")),
+    h("dl.kv", { style: "min-width:220px" },
+      h("dt", "S&P 500 vs 200-day average"), h("dd", h("span." + signClass(st.gap_pct), pct1(st.gap_pct))),
+      h("dt", "200-day average"), h("dd", fmt.num(st.sma200, 2)),
+      st.uses_momentum ? [h("dt", "12-month return vs T-bills"), h("dd", pct1(st.momentum_12m_pct) + " vs " + st.tbill_12m_pct.toFixed(1) + "%")] : null));
+  return h("section.card", head, picker,
+    h("p.small.soft", { style: "margin:8px 0 10px" }, h("strong", o.label + ": "), o.rule),
+    now,
+    long ? h("div.table-wrap", { style: "margin-top:12px" }, h("table",
+      h("thead", h("tr", h("th", "Tested (plan vs holding)"), h("th.r", "Per year"), h("th.r", "Worst drop"))),
+      h("tbody", row("S&P 500 since 1961", long.plan, long.hold), fund ? row("SPY since 1994", fund.plan, fund.hold) : null))) : null,
+    p.plan === "aggressive" ? h("div.note.warn", { style: "margin-top:10px;display:block" }, h("strong", "High risk. "),
+      "The 3x plan made the most money in testing, but fell as much as " + (long ? fmt.pct(long.plan.max_drawdown_pct, 0) : "−78%") +
+      " along the way, more than holding the index ever did. A one-day crash like 1987 would cost about 60% before the switch can act. Only use money you can leave alone for many years.")
+      : p.plan === "growth" ? h("p.small.muted", { style: "margin-top:8px" }, "Chosen before testing as the highest return whose worst drop was no deeper than simply holding the S&P 500; it then beat holding in both halves of history since 1961, in the fund era, and on the Nasdaq-100. Leveraged funds held all the time lost up to 99%, so the switch is not optional.")
+      : null,
+    h("p.muted.small", { style: "margin-top:6px" }, "Returns above are before taxes; every switch to cash realizes gains. Details on the ", h("a", { href: "#/track" }, "Track record"), " page."));
+}
+
 function marketCard(m, budget) {
   if (!m) return null;
   const share = m.exposure_pct / 100;
@@ -607,10 +648,13 @@ function dashboardPage(root) {
   const addBtn = h("button.btn.primary", { onclick: () => add() }, "Add to watchlist");
 
   const marketHost = h("div");
+  const profitHost = h("div");
   fill(root,
     pageHead("Dashboard", "Your watchlist, scored by the trading rules and sized to your budget.",
       h("div.search-wrap", input, suggestions), addBtn),
-    error, h("div.stack", marketHost, tiles, h("section.card", tableHost)));
+    error, h("div.stack", profitHost, marketHost, tiles, h("section.card", tableHost)));
+  const loadProfit = () => api("/api/profit").then((p) => fill(profitHost, profitCard(p, loadProfit))).catch(() => fill(profitHost));
+  loadProfit();
 
   function refresh() {
     const o = state.overview;
@@ -950,13 +994,13 @@ function alertsPage(root) {
   let filter = "all";
   const list = h("div");
   const chips = h("div.chips");
-  const FILTERS = [["all", "All"], ["insider", "Insider trades"], ["trend", "Market trends"], ["tradingview", "TradingView"], ["bullish", "Buy side"], ["bearish", "Sell side"], ["warning", "Heads-up"]];
+  const FILTERS = [["all", "All"], ["insider", "Insider trades"], ["trend", "Profit plan & trends"], ["tradingview", "TradingView"], ["bullish", "Buy side"], ["bearish", "Sell side"], ["warning", "Heads-up"]];
 
   async function refresh() {
     const data = await api("/api/notifications?limit=300");
     const items = data.items.filter((n) => filter === "all" || (filter === "insider" ? n.kind.startsWith("insider")
       : filter === "tradingview" ? n.kind === "tradingview"
-      : filter === "trend" ? ["market_trend", "trend_portfolio", "market_regime"].includes(n.kind) : n.tone === filter));
+      : filter === "trend" ? ["market_trend", "trend_portfolio", "market_regime", "profit_plan"].includes(n.kind) : n.tone === filter));
     fill(chips, FILTERS.map(([key, label]) => h("button.chip" + (filter === key ? ".on" : ""), { onclick: () => { filter = key; refresh(); } }, label)));
     fill(list, items.length ? items.map((n) => notificationItem(n)) : h("div.empty", "No alerts here yet. They appear when a signal changes, earnings approach, or an insider buys."));
   }
@@ -1646,6 +1690,8 @@ function trackRecordPage(root) {
   let scorecard = null;
   let scoreKey = null;
   let entries = null;
+  let profit = null;
+  let profitTest = "sp_long";
   const body = h("div.stack");
   fill(root, pageHead("Track record", "The rules replayed day by day on 20+ years of past prices, then checked against what happened next, on stocks and years they were not tuned on."), body);
 
@@ -1764,8 +1810,35 @@ function trackRecordPage(root) {
         h("li", "Past results do not guarantee future ones, and markets change once rules become popular.")),
       h("p.muted.small", { style: "margin-top:8px" }, "Run on " + new Date(r.generated).toLocaleString() + ". Rerun with: python -m stockanalysis.validation"));
 
-    fill(body, scorecard ? scorecardCard(scorecard) : null, entries ? entriesCard(entries) : null, ...storyCards(r), experiments ? experimentsCard(experiments) : null, stops ? stopsCard(stops) : null, h("h2", { style: "margin-top:12px;font-size:18px" }, "Round 1 in detail: the app's own Buy and Sell rules"),
+    fill(body, profit ? profitStudyCard(profit) : null, scorecard ? scorecardCard(scorecard) : null, entries ? entriesCard(entries) : null, ...storyCards(r), experiments ? experimentsCard(experiments) : null, stops ? stopsCard(stops) : null, h("h2", { style: "margin-top:12px;font-size:18px" }, "Round 1 in detail: the app's own Buy and Sell rules"),
       h("div.row", rulesChips), summary, h("div.row", cellChips), portfolioCard, signalCard, yearCard, searchCard, caveats);
+  }
+
+  function profitStudyCard(pr) {
+    const tests = Object.entries(pr.tests).filter(([k]) => k !== "dual_momentum");
+    const t = pr.tests[profitTest] || tests[0][1];
+    const rows = Object.entries(t.rows).sort((a, b) => b[1].cagr_pct - a[1].cagr_pct);
+    const hold = t.rows.hold_1x;
+    const dm = pr.tests.dual_momentum;
+    return h("section.card",
+      h("div.card-head", h("h2", "Maximum profit"), h("p", "Index funds, leverage and trend switches over 65 years")),
+      h("div.note", { style: "display:block;margin-bottom:10px" }, h("strong", "What made the most money: leverage with a trend switch. "),
+        "Holding a 2x or 3x index fund while the index is above its 200-day average (or the app's market switch is on), and T-bills otherwise, beat holding the index in every period tested. " +
+        "Leverage held all the time was a disaster (3x lost 99% at worst). The more leverage, the more profit and the deeper the drops, so the Profit plan on the dashboard lets you choose."),
+      h("div.chips", tests.map(([k, x]) => h("button.chip" + (k === profitTest ? ".on" : ""), { onclick: () => { profitTest = k; render(); } }, x.name.replace(/ \(.*\)/, "")))),
+      h("p.small.muted", { style: "margin:6px 0" }, t.name),
+      dataTable([
+        { label: "Strategy", cell: ([k, x]) => h("span", { style: k === pr.chosen ? "font-weight:700" : "" }, x.label, k === pr.chosen ? h("span.tag", { style: "margin-left:6px" }, "Tested pick") : null) },
+        { label: "Yearly return", right: true, cell: ([, x]) => h("span." + (x.cagr_pct > hold.cagr_pct ? "up" : ""), fmt.pct(x.cagr_pct, 1)) },
+        { label: "Worst drop", right: true, cell: ([, x]) => h("span." + (x.max_drawdown_pct < hold.max_drawdown_pct ? "down" : ""), fmt.pct(x.max_drawdown_pct, 0)) },
+        { label: "Worst year", right: true, hideSmall: true, cell: ([, x]) => fmt.pct(x.worst_year_pct, 0) + " (" + x.worst_year + ")" },
+        { label: "$10k became", right: true, hideSmall: true, cell: ([, x]) => fmt.money0(x.growth_of_10k) },
+      ], rows),
+      h("p.small.soft", { style: "margin-top:8px" }, "Green return = more than holding; red drop = deeper than holding. Simulated leveraged funds match the real ones closely (" +
+        pr.calibration.map((c) => c.fund + " " + fmt.pct(c.real_cagr_pct, 1) + " real vs " + fmt.pct(c.simulated_cagr_pct, 1) + " simulated").join(", ") + ")."),
+      dm ? h("p.small.soft", "Dual momentum (US / foreign stocks / bonds) since " + dm.name.match(/\d{4}/)[0] + ": " + fmt.pct(dm.rows.dual_momentum.cagr_pct, 1) + " a year vs " +
+        fmt.pct(dm.rows.hold_1x.cagr_pct, 1) + " for the S&P 500, so it is not used.") : null,
+      h("p.muted.small", "Index tests from 1961 use prices without dividends for every row, so all returns are about 2 points a year low. Full tables: docs/PROFIT.md."));
   }
 
   function entriesCard(en) {
@@ -2013,8 +2086,8 @@ function trackRecordPage(root) {
   }
 
   Promise.all([api("/api/validation"), api("/api/validation/stops").catch(() => null), api("/api/validation/experiments").catch(() => null),
-    api("/api/validation/scorecard").catch(() => null), api("/api/validation/entries").catch(() => null)])
-    .then(([r, st, ex, sc, en]) => { report = r; stops = st; experiments = ex; scorecard = sc; entries = en; render(); })
+    api("/api/validation/scorecard").catch(() => null), api("/api/validation/entries").catch(() => null), api("/api/validation/profit").catch(() => null)])
+    .then(([r, st, ex, sc, en, pr]) => { report = r; stops = st; experiments = ex; scorecard = sc; entries = en; profit = pr; render(); })
     .catch((e) => fill(body, h("section.card", h("div.empty", e.message))));
   return {};
 }

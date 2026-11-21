@@ -25,7 +25,7 @@ log = logging.getLogger("stockanalysis.push")
 
 INSIDER_KINDS = {"insider_buy", "insider_buy_market", "insider_sell", "insider_cluster", "tradingview"}
 # Rare (a few a year) and actionable, so they go to the phone with the default scope too.
-TREND_KINDS = {"market_trend", "trend_portfolio", "market_regime"}
+TREND_KINDS = {"market_trend", "trend_portfolio", "market_regime", "profit_plan"}
 TONE_TAGS = {"bullish": "chart_with_upwards_trend", "bearish": "chart_with_downwards_trend",
              "warning": "warning", "neutral": "bell", "info": "bell"}
 

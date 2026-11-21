@@ -39,10 +39,12 @@ DEFAULT_SETTINGS = {
     # 10-month rule band: buy only this % above the average, sell only this % below
     # (0 = the original rule). 2% halved trades and losing entries in testing.
     "trend_band_pct": 2.0,
+    # Profit plan (docs/PROFIT.md): off, steady (1x), growth (2x) or aggressive (3x)
+    "profit_plan": "growth",
 }
 
 TEXT_SETTINGS = {"sec_contact": 200, "push_url": 500, "tv_webhook_token": 100}
-CHOICE_SETTINGS = {"push_scope": ("insider", "all")}
+CHOICE_SETTINGS = {"push_scope": ("insider", "all"), "profit_plan": ("off", "steady", "growth", "aggressive")}
 BOOL_SETTINGS = {"options_enabled", "insider_alert_sells", "insider_market_alerts", "trend_portfolio_alerts"}
 MAX_TREND_ALERTS = 60
 

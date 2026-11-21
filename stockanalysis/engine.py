@@ -63,6 +63,8 @@ class Engine:
         self.market: dict | None = None
         from .trend_watch import TrendWatch
         self.trend = TrendWatch(db, provider, today_fn=lambda: self.today())
+        from .profit_plan import ProfitPlan
+        self.profit = ProfitPlan(db, provider)
 
     def today(self) -> date:
         return self._today_fn()
@@ -415,6 +417,10 @@ class Engine:
                 self.trend.update(notify)
             except Exception:
                 log.exception("Trend alerts failed")
+            try:
+                self.profit.update(notify)
+            except Exception:
+                log.exception("Profit plan failed")
             symbols = self.db.watchlist()
             for stale in [s for s in self.analyses if s not in symbols]:
                 del self.analyses[stale]

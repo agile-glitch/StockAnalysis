@@ -286,6 +286,16 @@ def run() -> dict:
                      note="Rebalanced daily to the volatility target, with costs; a monthly check would trade less.",
                      extra={"curve": {"strategy": _weekly_curve(r), "comparison": _weekly_curve(hold)}}))
 
+    from .profit import leveraged, signal as profit_signal, timed as profit_timed
+    spy_r = spy["close"].pct_change().fillna(0.0)
+    growth = profit_timed(leveraged(spy_r, 2, cash), profit_signal(spy["close"], "200d", tbill), cash).loc[start:]
+    rows.append(_row("profit_growth", "Profit plan: Growth", "A 2x S&P 500 fund while the S&P 500 is above its 200-day "
+                     "average, else T-bills (leveraged fund simulated before 2006, checked against the real one).",
+                     f"{start.year}–{growth.index[-1].year}", "Yes: chosen on the S&P 500 index from 1961 by a rule fixed "
+                     "before testing; also beat holding 1961–1993", growth, "Holding the S&P 500", hold, cash,
+                     note="Trades at the next close; before taxes.",
+                     extra={"curve": {"strategy": _weekly_curve(growth), "comparison": _weekly_curve(hold)}}))
+
     tp, same, sixty, pcash = trend_portfolio(prices, tbill)
     rows.append(_row("trend_portfolio", "Trend portfolio", "Faber's 10-month rule on 8 asset classes, equal shares, with the app's 2% band: "
                      "bought after a month-end close 2% above its 10-month average, sold after one 2% below.",

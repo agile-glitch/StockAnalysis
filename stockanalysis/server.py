@@ -321,6 +321,18 @@ def create_app(db: Database | None = None, provider: CachedProvider | None = Non
         key = tactic if tactic in TACTICS else None
         return {"symbol": tv_symbol(_symbol(symbol)), "studies": studies(key, parsed if isinstance(parsed, dict) else {})}
 
+    @app.get("/api/profit")
+    def profit_plan():
+        return engine.profit.snapshot()
+
+    @app.get("/api/validation/profit")
+    def validation_profit():
+        from .profit_plan import REPORT_PATHS
+        path = next((p for p in REPORT_PATHS if p.exists()), None)
+        if not path:
+            raise HTTPException(404, "No profit test yet. Run: python -m stockanalysis.validation.profit")
+        return FileResponse(path, media_type="application/json", headers={"Cache-Control": "no-cache"})
+
     @app.get("/api/trend")
     def trend_overview():
         return engine.trend.snapshot()

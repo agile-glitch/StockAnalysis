@@ -72,6 +72,29 @@ network), `--no-browser`.
   largest position, options on/off, options risk per trade, refresh interval.
   Changing the budget immediately resizes every trade plan and options idea.
 
+## Profit plan: the goal is profit
+
+The dashboard leads with a **Profit plan**: one clear instruction (what to
+hold now) and an alert the day it changes. It comes from the profit study
+([docs/PROFIT.md](docs/PROFIT.md)), which tested index funds, 2x and 3x
+leveraged funds, trend switches and dual momentum over 1961–today.
+
+| Plan | Rule | S&P 500 since 1961: per year / worst drop | SPY since 1994 |
+| --- | --- | --- | --- |
+| Hold the index (baseline) | always invested | +7.3% / −57% | +10.5% / −55% |
+| Steady | S&P 500 fund while the market switch is on, else T-bills | +9.0% / −33% | +10.4% / −28% |
+| **Growth** (default) | 2x S&P 500 fund (SSO) while the S&P 500 is above its 200-day average, else T-bills | +9.6% / −45% | +12.5% / −44% |
+| Aggressive | 3x S&P 500 fund (UPRO) while the market switch is on, else T-bills | +12.6% / −78% | +19.8% / −66% |
+
+Index figures since 1961 exclude dividends for every row (about 2 points a
+year low). Growth was picked before testing by a fixed rule (the highest
+return with a worst drop no deeper than holding) and then beat holding in both
+halves of history, in the fund era and on the Nasdaq-100. Leverage *without*
+the switch was a disaster (3x held all the time lost 99% at its worst). The
+simulated leveraged funds match the real SSO, UPRO, QLD and TQQQ closely.
+Choose the plan on the dashboard (or turn it off); rerun the study with
+`python -m stockanalysis.validation.profit`.
+
 ## Does it work? The track record
 
 The rules were replayed day by day on 20+ years of prices for about 190 large
@@ -103,11 +126,12 @@ record page): every method the app recommends, on past prices with costs.
 | --- | --- | --- | --- | --- |
 | Stock Buy/Sell signals (unseen stocks) | 2006–2026 | +9.6% | −45% | holding them: +12.1%, −55% |
 | Market risk switch | 1994–2026 | +9.1% | −21% | S&P 500: +10.4%, −55% |
+| Profit plan: Growth (2x with 200-day switch) | 1994–2026 | +12.3% | −44% | S&P 500: +10.4%, −55% |
 | Trend portfolio (8 assets, 2% band) | 2006–2026 | +5.1% | −12% | 60/40: +8.0%, −31% |
 | Market trend alerts (picked on data to 2015, 2% band) | 2016–2026 | +5.8% | −16% | holding them: +5.1%, −34% |
 
-All four made money and beat T-bills; only the market trend alerts made more
-than their comparison, and by a small margin. The real gain is smaller worst
+All made money and beat T-bills; the Growth profit plan and the market trend
+alerts made more than their comparisons. The real gain is smaller worst
 drops. Rerun with `python -m stockanalysis.validation.scorecard`.
 
 **Cutting losing entries** ([docs/ENTRIES.md](docs/ENTRIES.md)): entry
@@ -249,6 +273,7 @@ stockanalysis/
   tradingview.py            TradingView charts, Pine Script export, webhook alerts
   markets_view.py           live view of other markets for the Markets page
   trend_watch.py            10-month-rule market alerts and the trend portfolio tracker
+  profit_plan.py            the Profit plan (steady / growth / aggressive) and its alerts
   validation/               historical test: replay, signal study, portfolio, walk-forward
   sec.py                    SEC EDGAR client and Form 4 parser
   insiders.py               live insider-trade watcher and alerts
