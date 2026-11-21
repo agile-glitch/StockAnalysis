@@ -408,6 +408,17 @@ def create_app(db: Database | None = None, provider: CachedProvider | None = Non
             raise HTTPException(404, "No entry test yet. Run: python -m stockanalysis.validation.entries")
         return FileResponse(path, media_type="application/json", headers={"Cache-Control": "no-cache"})
 
+    @app.get("/api/validation/recent")
+    def validation_recent():
+        from .validation.recent import BUNDLED as RC_BUNDLED
+        from .validation.run import REPORT_DIR
+        path = REPORT_DIR / "recent.json"
+        if not path.exists():
+            path = RC_BUNDLED
+        if not path.exists():
+            raise HTTPException(404, "No recent test yet. Run: python -m stockanalysis.validation.recent")
+        return FileResponse(path, media_type="application/json", headers={"Cache-Control": "no-cache"})
+
     @app.get("/api/validation/stops")
     def validation_stops():
         from .validation.run import REPORT_DIR

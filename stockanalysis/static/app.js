@@ -1692,6 +1692,7 @@ function trackRecordPage(root) {
   let entries = null;
   let profit = null;
   let profitTest = "sp_long";
+  let recent = null;
   const body = h("div.stack");
   fill(root, pageHead("Track record", "The rules replayed day by day on 20+ years of past prices, then checked against what happened next, on stocks and years they were not tuned on."), body);
 
@@ -1810,8 +1811,33 @@ function trackRecordPage(root) {
         h("li", "Past results do not guarantee future ones, and markets change once rules become popular.")),
       h("p.muted.small", { style: "margin-top:8px" }, "Run on " + new Date(r.generated).toLocaleString() + ". Rerun with: python -m stockanalysis.validation"));
 
-    fill(body, profit ? profitStudyCard(profit) : null, scorecard ? scorecardCard(scorecard) : null, entries ? entriesCard(entries) : null, ...storyCards(r), experiments ? experimentsCard(experiments) : null, stops ? stopsCard(stops) : null, h("h2", { style: "margin-top:12px;font-size:18px" }, "Round 1 in detail: the app's own Buy and Sell rules"),
+    fill(body, recent ? recentCard(recent) : null, profit ? profitStudyCard(profit) : null, scorecard ? scorecardCard(scorecard) : null, entries ? entriesCard(entries) : null, ...storyCards(r), experiments ? experimentsCard(experiments) : null, stops ? stopsCard(stops) : null, h("h2", { style: "margin-top:12px;font-size:18px" }, "Round 1 in detail: the app's own Buy and Sell rules"),
       h("div.row", rulesChips), summary, h("div.row", cellChips), portfolioCard, signalCard, yearCard, searchCard, caveats);
+  }
+
+  function recentCard(rc) {
+    const m = rc.methods, ins = rc.insiders;
+    const cell = (x) => (!x || x.return_pct === null || x.return_pct === undefined ? "—"
+      : h("div", h("strong." + signClass(x.return_pct), fmt.pct(x.return_pct, 1)), h("div.small.muted", "worst " + fmt.pct(x.max_drawdown_pct, 0))));
+    const insiderRows = ins && ins.variants ? Object.values(ins.variants) : [];
+    const ex = (x) => (!x ? "—" : h("div", h("span." + signClass(x.avg_excess_pct), fmt.pct(x.avg_excess_pct, 1)), h("div.small.muted", "beat " + x.beat_market_pct + "% · n " + x.n)));
+    return h("section.card",
+      h("div.card-head", h("h2", "Recent market"), h("p", "Data to " + fmt.date(m.as_of) + "; short periods are mostly luck")),
+      dataTable([
+        { label: "Method", cell: (r) => r.label },
+        { label: "Last 12 months", right: true, cell: (r) => cell(r["12m"]) },
+        { label: "Since 2024", right: true, cell: (r) => cell(r.since_2024) },
+        { label: m.as_of.slice(0, 4) + " so far", right: true, hideSmall: true, cell: (r) => cell(r.ytd) },
+      ], Object.values(m.rows)),
+      insiderRows.length ? h("div", { style: "margin-top:12px" }, h("h3", "Copying insider purchases, last two years"),
+        h("p.small.soft", ins.purchases + " purchases in " + ins.stocks + " of the app's test stocks (" + fmt.date(ins.first) + " to " + fmt.date(ins.last) + "), bought three trading days after each trade. Return over the S&P 500 for the same days:"),
+        dataTable([
+          { label: "Copy rule", cell: (v) => v.label },
+          { label: "1 month", right: true, cell: (v) => ex(v.h21) },
+          { label: "3 months", right: true, cell: (v) => ex(v.h63) },
+          { label: "6 months", right: true, cell: (v) => ex(v.h126) },
+        ], insiderRows)) : null,
+      h("p.muted.small", { style: "margin-top:8px" }, "Full tables: docs/RECENT.md. The long tests above decide whether a method works; this checks how it has done lately."));
   }
 
   function profitStudyCard(pr) {
@@ -2086,8 +2112,9 @@ function trackRecordPage(root) {
   }
 
   Promise.all([api("/api/validation"), api("/api/validation/stops").catch(() => null), api("/api/validation/experiments").catch(() => null),
-    api("/api/validation/scorecard").catch(() => null), api("/api/validation/entries").catch(() => null), api("/api/validation/profit").catch(() => null)])
-    .then(([r, st, ex, sc, en, pr]) => { report = r; stops = st; experiments = ex; scorecard = sc; entries = en; profit = pr; render(); })
+    api("/api/validation/scorecard").catch(() => null), api("/api/validation/entries").catch(() => null), api("/api/validation/profit").catch(() => null),
+    api("/api/validation/recent").catch(() => null)])
+    .then(([r, st, ex, sc, en, pr, rc]) => { report = r; stops = st; experiments = ex; scorecard = sc; entries = en; profit = pr; recent = rc; render(); })
     .catch((e) => fill(body, h("section.card", h("div.empty", e.message))));
   return {};
 }
