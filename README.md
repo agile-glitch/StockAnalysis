@@ -82,12 +82,15 @@ back for testing. Full results are on the app's **Track record** page and in
 - Every version of the rules made money in every period.
 - The per-stock Buy and Sell ratings did **not** beat the market: new Buy
   signals beat the S&P 500 about half the time.
-- What held up was **market-level risk control**: holding less stock when the
-  whole market is in a downtrend or very turbulent roughly halved the worst
-  losses (−35% instead of −55% on unseen stocks, 2006–2026), with a similar
+- What came closest to holding up was **market-level risk control**: holding
+  less stock when the whole market is in a downtrend or very turbulent made
+  crashes smaller (worst loss −45% instead of −55% on unseen stocks, 2006–2026,
+  when the rule was chosen year by year in real time), with about the same
   return per unit of risk.
-- It did **not** make more money than staying invested: about 9.4% a year
+- It did **not** make more money than staying invested: about 9.6% a year
   against 12.1%, mostly from missing fast rebounds.
+- None of 172 indicator settings (moving averages, RSI, Bollinger bands, MACD,
+  breakouts, momentum) beat holding on unseen stocks. See the Indicator Lab.
 
 So the dashboard leads with a **Market risk** indicator (a suggested share of
 your budget in stocks, with an alert when the market turns), and the stock
@@ -97,6 +100,23 @@ To rerun the test (downloads about 190 price histories the first time):
 
 ```bash
 python -m stockanalysis.validation
+```
+
+## Indicator Lab
+
+Indicator settings (moving-average lengths, RSI thresholds, band widths) work
+like a model's weights, so the **Indicator lab** page lets you change them with
+sliders and immediately see how that tactic would have traded any stock over
+the last 10 years, against simply holding it. You can save a tactic as **my
+indicator alert** to get buy and sell alerts for your watchlist.
+
+172 settings across 8 indicators were also fitted the machine-learning way
+(train on some stocks and years, validate and test on others). None beat
+holding on data they were not tuned on. See
+[docs/INDICATOR_LAB.md](docs/INDICATOR_LAB.md). To rerun:
+
+```bash
+python -m stockanalysis.validation.lab
 ```
 
 ## How the signal is built
@@ -135,7 +155,9 @@ stockanalysis/
   engine.py                 analysis, notifications, background scheduler
   db.py                     SQLite: settings, watchlist, positions, alerts
   server.py                 HTTP API (FastAPI)
-  market.py                 market risk indicator (the rule that held up)
+  market.py                 market risk indicator
+  tactics.py                indicator tactics with adjustable settings
+  lab_runner.py             runs a tactic on one stock (Indicator Lab)
   validation/               historical test: replay, signal study, portfolio, walk-forward
   sec.py                    SEC EDGAR client and Form 4 parser
   insiders.py               live insider-trade watcher and alerts
@@ -145,6 +167,7 @@ stockanalysis/
 docs/STRATEGIES.md          research behind the rules
 docs/INSIDER_ALERTS.md      how to get insider-trade alerts, compared
 docs/VALIDATION.md          the historical test results (generated)
+docs/INDICATOR_LAB.md       indicator-settings test results (generated)
 tests/                      pytest suite (runs offline on demo data)
 ```
 

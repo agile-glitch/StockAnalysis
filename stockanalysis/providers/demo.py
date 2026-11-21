@@ -82,7 +82,7 @@ class DemoProvider(Provider):
 
     def history(self, symbol: str, period: str = "2y") -> pd.DataFrame:
         drift, vol, start, _ = self._profile(symbol)
-        years = {"1y": 1, "2y": 2, "5y": 5}.get(period, 2)
+        years = {"1y": 1, "2y": 2, "5y": 5, "10y": 5, "max": 5}.get(period, 2)
         # Generate the longest path and slice, so every period ends on the same prices.
         n_total = 5 * 252
         rng = np.random.default_rng(_seed(symbol, "prices"))

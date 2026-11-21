@@ -318,3 +318,8 @@ tbody tr.click:hover { background: var(--surface-2); }
 }
 
 .market-bar .meter-track::after { display: none; }
+
+/* indicator lab */
+.lab-params { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 12px 20px; margin-top: 8px; }
+.lab-params input[type="range"] { flex: 1; min-width: 0; accent-color: var(--accent); }
+details summary { cursor: pointer; color: var(--ink-2); margin-bottom: 6px; }

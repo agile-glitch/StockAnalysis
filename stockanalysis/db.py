@@ -27,6 +27,8 @@ DEFAULT_SETTINGS = {
     # Push notifications to a phone (ntfy, Discord or Slack webhook URL)
     "push_url": "",
     "push_scope": "insider",      # "insider" (insider trades only) or "all"
+    # Your own indicator alert from the Indicator Lab: {"tactic": key, "params": {...}} or {}
+    "my_tactic": {},
 }
 
 TEXT_SETTINGS = {"sec_contact": 200, "push_url": 500}
@@ -172,6 +174,15 @@ class Database:
                 raise SettingsError(f"Unknown setting: {key}")
             if key in BOOL_SETTINGS:
                 clean[key] = bool(value)
+                continue
+            if key == "my_tactic":
+                if not value:
+                    clean[key] = {}
+                    continue
+                from .tactics import TACTICS, clean_params
+                if not isinstance(value, dict) or value.get("tactic") not in TACTICS:
+                    raise SettingsError("my_tactic needs a known tactic")
+                clean[key] = {"tactic": value["tactic"], "params": clean_params(value["tactic"], value.get("params"))}
                 continue
             if key in TEXT_SETTINGS:
                 text = str(value or "").strip()

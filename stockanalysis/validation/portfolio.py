@@ -85,6 +85,9 @@ class Panel:
                    spy_sma200=spy_sma.to_numpy(dtype=float), cash_rate=cash_rate, spy_mom12=spy_mom12,
                    cash_12m=cash_12m, spy_vol=spy_vol)
 
+    def cash_series(self) -> pd.Series | None:
+        return None if self.cash_rate is None else pd.Series(self.cash_rate, index=self.dates)
+
     def window(self, start: str, end: str | None = None) -> tuple[int, int]:
         lo = int(self.dates.searchsorted(pd.Timestamp(start)))
         hi = int(self.dates.searchsorted(pd.Timestamp(end), side="right")) if end else len(self.dates)
@@ -203,13 +206,22 @@ def simulate(p: Panel, rules: Rules, start: str, end: str | None = None, capital
             "trades": trades, "open_trades": open_trades}
 
 
-def curve_metrics(curve: pd.Series) -> dict:
+def curve_metrics(curve: pd.Series, cash_rate: pd.Series | None = None) -> dict:
+    """Return, risk and Sharpe statistics for an equity curve.
+
+    The Sharpe ratio uses returns above the T-bill rate (`cash_rate`, daily
+    decimal), the standard definition. Without that, a strategy that sits in
+    interest-earning cash looks almost risk-free and scores far too high.
+    """
     curve = curve.dropna()
     if len(curve) < 2 or curve.iloc[0] <= 0:
         return {}
     years = (curve.index[-1] - curve.index[0]).days / 365.25
     total = curve.iloc[-1] / curve.iloc[0] - 1
     daily = curve.pct_change().dropna()
+    excess = daily
+    if cash_rate is not None:
+        excess = daily - cash_rate.reindex(daily.index).fillna(0.0)
     vol = daily.std() * math.sqrt(252)
     peak = curve.cummax()
     dd = (curve / peak - 1).min()
@@ -219,7 +231,7 @@ def curve_metrics(curve: pd.Series) -> dict:
         "total_return_pct": round(total * 100, 1),
         "cagr_pct": round(cagr * 100, 2),
         "volatility_pct": round(vol * 100, 1),
-        "sharpe": round(float(daily.mean() / daily.std() * math.sqrt(252)), 2) if daily.std() > 0 else None,
+        "sharpe": round(float(excess.mean() / excess.std() * math.sqrt(252)), 2) if excess.std() > 0 else None,
         "max_drawdown_pct": round(dd * 100, 1),
         "return_to_drawdown": round(cagr / abs(dd), 2) if dd < 0 else None,
         "years": round(years, 1),

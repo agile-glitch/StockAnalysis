@@ -1,13 +1,13 @@
 # Track record: does the program hold up on past data?
 
-Generated 2026-11-21T07:36:13+00:00 by `python -m stockanalysis.validation` (runs in under a minute once prices are cached). The same results are on the app's **Track record** page.
+Generated 2026-11-21T14:50:11+00:00 by `python -m stockanalysis.validation` (runs in under a minute once prices are cached). The same results are on the app's **Track record** page.
 
 ## Bottom line
 
 1. **Every version of the rules made money** in every period tested.
 2. **The per-stock Buy and Sell ratings did not beat the market.** For example, on 2015–today data, 3,337 new Buy signals beat the S&P 500 over the next 3 months 45.8% of the time, with an average excess return of -0.02%. Stocks rated Sell did no worse than average, and in some periods better.
-3. **Market-level risk control held up.** Following a market-timing rule chosen year by year with only past data, on 58 stocks never used for tuning (20.9 years): worst loss -34.6% instead of -54.8%, Sharpe 0.68 vs 0.65.
-4. **It did not make more money than staying invested:** 9.44% a year vs 12.13%. On the S&P 500 itself: 8.42% vs 10.44% a year, worst loss -24.9% vs -55.2%. The cost comes from missing fast rebounds (2019, 2020, 2023).
+3. **Market-level risk control made crashes smaller, but did not improve returns.** Following a market-timing rule chosen year by year with only past data, on 58 stocks never used for tuning (20.9 years): worst loss -44.6% instead of -54.8%, Sharpe 0.54 vs 0.57 (Sharpe ratios use returns above T-bills).
+4. **It did not make more money than staying invested:** 9.62% a year vs 12.13%. On the S&P 500 itself: 8.79% vs 10.44% a year, worst loss -33.7% vs -55.2%. The cost comes from missing fast rebounds (2019, 2020, 2023).
 
 So the app now shows a **Market risk** indicator on the dashboard (suggested share of the budget in stocks) based on the rule that held up, and the per-stock ratings are presented as information, not as a proven trading system.
 
@@ -15,7 +15,7 @@ So the app now shows a **Market risk** indicator on the dashboard (suggested sha
 
 - **What is replayed:** price rules (trend, momentum, 52-week high, pullback, MACD) and earnings surprise. Not replayed: insider trades and news tone (no free history). The replayed scorer is checked against the live app's code to give identical scores.
 - **No peeking:** signals use only data up to each day's close; trades happen at the next open. Earnings surprises count from the day after the report.
-- **Costs:** 10.0 basis points per buy and per sell. Idle cash earns the 3-month T-bill rate.
+- **Costs:** 10.0 basis points per buy and per sell. Idle cash earns the 3-month T-bill rate. Sharpe ratios use returns above T-bills (corrected on 2026-11-21; earlier versions used raw returns, which flattered strategies that hold cash).
 - **Training data:** 73 stocks, 2003-2014. **Test data:** same stocks 2015-today, plus 57 held-out stocks over both periods.
 - **Final exam:** 58 further stocks, untouched until round 2 had picked its rules, run once.
 - **Survivorship bias:** only companies that still trade could be downloaded, which flatters every long-only result. Comparisons are against buying and holding the *same* stocks, which shares the bias.
@@ -38,16 +38,16 @@ Selection: made money in all four periods, then highest median Sharpe advantage 
 
 | Idea | Median Sharpe advantage | Worst period | Always profitable |
 | --- | --- | --- | --- |
-| Hold all except Sell-rated, market filter **(chosen)** | +0.17 | -0.22 | Yes |
-| Hold all, market filter | +0.16 | -0.23 | Yes |
-| Top 25 momentum, market filter | +0.11 | -0.26 | Yes |
-| Hold Buy-rated stocks, market filter | +0.10 | -0.19 | Yes |
-| Top 15 by app score, market filter | +0.06 | -0.29 | Yes |
-| Top 15 momentum, market filter | +0.00 | -0.34 | Yes |
-| Hold Buy-rated stocks | -0.03 | -0.09 | Yes |
-| Hold stocks above their 200-day average | -0.08 | -0.24 | Yes |
-| Market filter | -0.20 | -0.25 | Yes |
-| App rules (baseline) | -0.24 | -0.48 | Yes |
+| Hold all except Sell-rated, market filter **(chosen)** | +0.12 | -0.28 | Yes |
+| Hold all, market filter | +0.11 | -0.29 | Yes |
+| Top 25 momentum, market filter | +0.09 | -0.31 | Yes |
+| Hold Buy-rated stocks, market filter | +0.06 | -0.25 | Yes |
+| Top 15 by app score, market filter | +0.03 | -0.34 | Yes |
+| Top 15 momentum, market filter | -0.01 | -0.37 | Yes |
+| Hold Buy-rated stocks | -0.04 | -0.10 | Yes |
+| Hold stocks above their 200-day average | -0.09 | -0.24 | Yes |
+| Market filter | -0.25 | -0.28 | Yes |
+| App rules (baseline) | -0.28 | -0.51 | Yes |
 
 ### Final exam (58 untouched stocks)
 
@@ -62,11 +62,11 @@ Each year, the rule with the best Sharpe ratio over all *earlier* years (on stoc
 
 | Basket | Rule: yearly | Rule: worst drop | Rule: Sharpe | Always invested: yearly | Always invested: worst drop | Always invested: Sharpe |
 | --- | --- | --- | --- | --- | --- | --- |
-| Final-exam stocks (unseen) | +9.4% | -34.6% | 0.68 | +12.1% | -54.8% | 0.65 |
-| Training stocks | +10.5% | -27.9% | 0.79 | +13.4% | -54.0% | 0.74 |
-| S&P 500 (SPY) | +8.4% | -24.9% | 0.66 | +10.4% | -55.2% | 0.61 |
+| Final-exam stocks (unseen) | +9.6% | -44.6% | 0.54 | +12.1% | -54.8% | 0.57 |
+| Training stocks | +10.8% | -36.5% | 0.64 | +13.4% | -54.0% | 0.65 |
+| S&P 500 (SPY) | +8.8% | -33.7% | 0.53 | +10.4% | -55.2% | 0.52 |
 
-Rule used each year: 2006: Both filters must agree, 2007: Both filters must agree, 2008: Both filters must agree, 2009: Both filters must agree, 2010: Both filters must agree, 2011: Both filters must agree, 2012: Volatility target 15% + both filters, 2013: Volatility target 15% + both filters, 2014: Volatility target 15% + both filters, 2015: Volatility target 15% + both filters, 2016: Volatility target 15% + both filters, 2017: 200-day filter, 2018: 200-day filter, 2019: Volatility target 15% + both filters, 2020: Volatility target 15% + both filters, 2021: 200-day filter, 2022: 200-day filter, 2023: Volatility target 15% + 200-day filter, 2024: Volatility target 15% + both filters, 2025: Volatility target 15% + both filters, 2026: Volatility target 15% + both filters.
+Rule used each year: 2006: Both filters must agree, 2007: Both filters must agree, 2008: Both filters must agree, 2009: Both filters must agree, 2010: Both filters must agree, 2011: Both filters must agree, 2012: Both filters must agree, 2013: Both filters must agree, 2014: Both filters must agree, 2015: Both filters must agree, 2016: Both filters must agree, 2017: Both filters must agree, 2018: 200-day filter, 2019: Both filters must agree, 2020: Both filters must agree, 2021: 200-day filter, 2022: 200-day filter, 2023: 200-day filter, 2024: Volatility target 15% + both filters, 2025: Volatility target 15% + both filters, 2026: Volatility target 15% + both filters.
 
 ## What this cannot tell you
 

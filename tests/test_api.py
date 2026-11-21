@@ -140,3 +140,24 @@ def test_push_test_endpoint(client):
     assert len(PUSHES.sent) == before + 1
     bad = client.post("/api/push/test", json={"url": "https://ntfy.sh/"})
     assert bad.status_code == 400 and "ntfy" in bad.json()["detail"]
+
+
+def test_indicator_lab_endpoints(client):
+    cat = client.get("/api/lab/tactics").json()
+    assert len(cat) == 8 and all("params" in c for c in cat)
+    res = client.post("/api/lab/run", json={"symbol": "nvda", "tactic": "price_ma", "params": {"n": 100}}).json()
+    assert res["symbol"] == "NVDA" and res["label"] == "Above 100-day average"
+    assert client.post("/api/lab/run", json={"symbol": "NVDA", "tactic": "bogus"}).status_code == 400
+    assert client.post("/api/lab/run", json={"symbol": "ZZZZZZ9", "tactic": "macd"}).status_code == 404
+    assert client.get("/api/lab/results").status_code in (200, 404)
+
+
+def test_my_indicator_alert_setting(client):
+    saved = client.put("/api/settings", json={"my_tactic": {"tactic": "ma_cross", "params": {"fast": 10, "slow": 50}}})
+    assert saved.status_code == 200
+    assert saved.json()["my_tactic"] == {"tactic": "ma_cross", "params": {"fast": 10, "slow": 50, "ema": 0}}
+    row = client.get("/api/overview").json()["watchlist"][0]
+    assert row["my_tactic"]["label"] == "10/50-day SMA crossover" and isinstance(row["my_tactic"]["holding"], bool)
+    assert client.put("/api/settings", json={"my_tactic": {"tactic": "nope"}}).status_code == 400
+    assert client.put("/api/settings", json={"my_tactic": {}}).json()["my_tactic"] == {}
+    assert client.get("/api/overview").json()["watchlist"][0]["my_tactic"] is None

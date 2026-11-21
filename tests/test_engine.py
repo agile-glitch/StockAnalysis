@@ -140,3 +140,13 @@ def test_trailing_stop_tracks_best_close_since_buying_and_alerts(engine, db):
     assert not [n for n in db.notifications() if n["kind"] == "chandelier_exit"]
     # Stocks you don't own get no trailing stop.
     assert "trailing_stop" not in engine.analyses["AAPL"]["plan"]
+
+
+def test_my_indicator_alerts_when_it_flips(engine, db):
+    db.update_settings({"my_tactic": {"tactic": "price_ma", "params": {"n": 5}}})
+    engine.scan()
+    for sym, a in engine.analyses.items():
+        assert a["my_tactic"]["label"] == "Above 5-day average"
+    flips = [a for a in engine.analyses.values() if a["my_tactic"]["changed_today"]]
+    alerts = [n for n in db.notifications() if n["kind"].startswith("my_tactic")]
+    assert len(alerts) == len(flips)

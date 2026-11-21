@@ -1,5 +1,7 @@
 # Our own stop-loss backtest (StockAnalysis app data)
 
+> Correction (2026-11-21): the Sharpe columns below used raw returns. Recomputed on returns above T-bills, the wide trailing stops gain only +0.01 to +0.03 and the 200-day exit is slightly negative; corrected figures are in the report and `stockanalysis/validation/latest_stops.json`. Return and drawdown figures are unchanged.
+
 ## Takeaway
 
 On ~190 large US stocks over 2003–2026, every stop-loss rule tested lowered average annual return versus holding with no stop. Wide trailing stops (20–30%) and the 200-day-average exit cut the worst drawdown substantially and nudged the Sharpe ratio up slightly; tight stops (10% trailing, chandelier 3 ATR, 50-day average) cost 7–9 percentage points a year and lowered the Sharpe ratio. Fixed stops measured from the entry price barely mattered because a held stock rarely falls 8–25% below its purchase price and stays there. After a stop-out, the stock was higher 60 trading days later 62–72% of the time (whipsaw).

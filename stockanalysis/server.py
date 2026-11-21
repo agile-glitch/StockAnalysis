@@ -40,6 +40,12 @@ class ReadIn(BaseModel):
 class PushTestIn(BaseModel):
     url: str | None = None
 
+
+class LabRunIn(BaseModel):
+    symbol: str
+    tactic: str
+    params: dict = Field(default_factory=dict)
+
 INSIDER_SETTINGS = {"sec_contact", "insider_poll_minutes", "insider_alert_sells", "insider_sell_min_value",
                     "insider_market_alerts", "insider_market_min_value"}
 
@@ -234,6 +240,39 @@ def create_app(db: Database | None = None, provider: CachedProvider | None = Non
         if not path.exists():
             raise HTTPException(404, "No track record yet. Run: python -m stockanalysis.validation")
         return FileResponse(path, media_type="application/json", headers={"Cache-Control": "no-cache"})
+
+    @app.get("/api/lab/tactics")
+    def lab_tactics():
+        from .lab_runner import tactic_catalog
+        return tactic_catalog()
+
+    @app.get("/api/lab/results")
+    def lab_results():
+        from .lab_runner import load_lab_report
+        report = load_lab_report()
+        if not report:
+            raise HTTPException(404, "No indicator test yet. Run: python -m stockanalysis.validation.lab")
+        return report
+
+    @app.post("/api/lab/run")
+    def lab_run(body: LabRunIn):
+        from . import lab_runner
+        from .tactics import TACTICS
+        symbol = _symbol(body.symbol)
+        if body.tactic not in TACTICS:
+            raise HTTPException(400, "Unknown tactic")
+        try:
+            df = provider.history(symbol, "10y")
+        except ProviderError as exc:
+            raise HTTPException(404, str(exc)) from exc
+        if len(df) < 300:
+            raise HTTPException(400, f"{symbol} needs more than a year of history to test.")
+        tbill = None
+        try:
+            tbill = provider.history("^IRX", "10y")["close"]
+        except Exception:
+            pass
+        return {"symbol": symbol, **lab_runner.run(df, body.tactic, body.params, tbill)}
 
     @app.get("/api/validation/stops")
     def validation_stops():

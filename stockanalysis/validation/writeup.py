@@ -41,17 +41,19 @@ def write_markdown(r: dict) -> str:
             f"{buy60['signals']:,} new Buy signals beat the S&P 500 over the next 3 months {buy60['win_rate']}% of the "
             f"time, with an average excess return of {_p(buy60['avg_excess'], 2)}. Stocks rated Sell did no worse than "
             "average, and in some periods better.",
-            f"3. **Market-level risk control held up.** Following a market-timing rule chosen year by year with only "
+            f"3. **Market-level risk control made crashes smaller, but did not improve returns.** Following a "
+            f"market-timing rule chosen year by year with only "
             f"past data, on {len(r['final_exam']['symbols'])} stocks never used for tuning ({ex['walk_forward']['years']} years): "
             f"worst loss {ex['walk_forward']['max_drawdown_pct']}% instead of {ex['buy_and_hold']['max_drawdown_pct']}%, "
-            f"Sharpe {ex['walk_forward']['sharpe']} vs {ex['buy_and_hold']['sharpe']}.",
+            f"Sharpe {ex['walk_forward']['sharpe']} vs {ex['buy_and_hold']['sharpe']} (Sharpe ratios use returns above T-bills).",
             f"4. **It did not make more money than staying invested:** {ex['walk_forward']['cagr_pct']}% a year vs "
             f"{ex['buy_and_hold']['cagr_pct']}%. On the S&P 500 itself: {sp['walk_forward']['cagr_pct']}% vs "
             f"{sp['buy_and_hold']['cagr_pct']}% a year, worst loss {sp['walk_forward']['max_drawdown_pct']}% vs "
             f"{sp['buy_and_hold']['max_drawdown_pct']}%. The cost comes from missing fast rebounds (2019, 2020, 2023).",
             "",
             "So the app now shows a **Market risk** indicator on the dashboard (suggested share of the budget in "
-            "stocks) based on the rule that held up, and the per-stock ratings are presented as information, not "
+            "stocks) based on the rule that came closest to holding up, and the per-stock ratings are presented as "
+            "information, not "
             "as a proven trading system.",
             "",
         ]
@@ -62,7 +64,7 @@ def write_markdown(r: dict) -> str:
         "The replayed scorer is checked against the live app's code to give identical scores.",
         "- **No peeking:** signals use only data up to each day's close; trades happen at the next open. "
         "Earnings surprises count from the day after the report.",
-        f"- **Costs:** {d['cost_bps_per_side']} basis points per buy and per sell. Idle cash earns the 3-month T-bill rate.",
+        f"- **Costs:** {d['cost_bps_per_side']} basis points per buy and per sell. Idle cash earns the 3-month T-bill rate. Sharpe ratios use returns above T-bills (corrected on 2026-11-21; earlier versions used raw returns, which flattered strategies that hold cash).",
         f"- **Training data:** {d['train']}. **Test data:** {d['test']}.",
         f"- **Final exam:** {len(r['final_exam']['symbols'])} further stocks, untouched until round 2 had picked its rules, run once.",
         "- **Survivorship bias:** only companies that still trade could be downloaded, which flatters every "

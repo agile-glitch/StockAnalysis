@@ -18,35 +18,35 @@ A note on evidence quality: the full texts of several of these papers could not 
 
 ## The app's 20-year test reproduces the published pattern
 
-The app's own validation module (`stockanalysis/validation/stops.py`, run 2026-11-21 on Yahoo Finance adjusted prices) tested 20 exit-and-re-entry rules. The universe was 188 large US stocks split into training (73), held-out (57) and final-exam (58) groups, and each group was run over 2003–2014 (including 2008) and 2015–2026, giving six test sets. Each stock got an equal slice of money and started fully invested. A stopped-out slice earned the 3-month T-bill rate until its re-entry rule fired. Intraday stops filled at the stop price, or at the open if the stock gapped below it. Close-based rules sold at the next open. Each trade cost 10 basis points, and the test had no look-ahead. The no-stop benchmark returned **11.4–21.3% a year with worst drawdowns of −36% to −54%** and Sharpe ratios of 0.72–0.90.
+The app's own validation module (`stockanalysis/validation/stops.py`, run 2026-11-21 on Yahoo Finance adjusted prices) tested 20 exit-and-re-entry rules. The universe was 188 large US stocks split into training (73), held-out (57) and final-exam (58) groups, and each group was run over 2003–2014 (including 2008) and 2015–2026, giving six test sets. Each stock got an equal slice of money and started fully invested. A stopped-out slice earned the 3-month T-bill rate until its re-entry rule fired. Intraday stops filled at the stop price, or at the open if the stock gapped below it. Close-based rules sold at the next open. Each trade cost 10 basis points, and the test had no look-ahead. The no-stop benchmark returned **11.4–21.3% a year with worst drawdowns of −36% to −54%** and Sharpe ratios of 0.60–0.82 (measured on returns above T-bills).
 
 | Rule (re-entry) | Return vs hold (pts/yr) | Worst drawdown vs hold (pts) | Sharpe vs hold | Sets won on Sharpe | Stop-outs per stock per year | Higher 60 days after stop-out | Drawdown pts bought per return pt lost |
 |---|---|---|---|---|---|---|---|
-| Trailing 30% (new 20-day high) | −1.46 | +8.2 | +0.043 | 5/6 | 0.36 | 67% | 5.6 |
-| Trailing 20% (new 20-day high) | −2.58 | +13.5 | +0.057 | 4/6 | 0.86 | 66% | 5.2 |
-| Close below 200-day avg (close above) | −4.79 | +24.3 | +0.040 | 4/6 | 3.97 | 63% | 5.1 |
-| Trailing 20% (next month) | −1.99 | +6.2 | +0.027 | 4/6 | 1.02 | 67% | 3.1 |
-| Trailing 10% (next month) | −4.67 | +14.9 | 0.000 | 4/6 | 3.54 | 64% | 3.2 |
-| Fixed 8% below entry (next month) | −0.64 | +0.5 | −0.010 | 1/6 | 0.33 | 69% | 0.8 |
-| 2.5 ATR below entry (next month) | −0.54 | +0.3 | −0.007 | 1/6 | 0.28 | 72% | 0.6 |
-| Time stop: losing after 60 days (next month) | −0.37 | +0.1 | −0.010 | 0/6 | 0.19 | 70% | 0.3 |
-| Trailing 10% (new 20-day high) | −7.52 | +24.5 | −0.058 | 2/6 | 2.70 | 64% | 3.3 |
-| Chandelier, 22-day high − 3 ATR (new 20-day high) | −8.59 | +25.4 | −0.100 | 1/6 | 4.46 | 63% | 3.0 |
-| Close below 50-day avg (close above) | −8.59 | +22.3 | −0.170 | 1/6 | 8.46 | 62% | 2.6 |
-| Chandelier, 22-day high − 3 ATR (next month) | −9.42 | +22.8 | −0.180 | 1/6 | 7.85 | 63% | 2.4 |
+| Trailing 30% (new 20-day high) | −1.46 | +8.2 | +0.023 | 3/6 | 0.36 | 67% | 5.6 |
+| Trailing 20% (new 20-day high) | −2.58 | +13.5 | +0.028 | 4/6 | 0.86 | 66% | 5.2 |
+| Close below 200-day avg (close above) | −4.79 | +24.3 | −0.023 | 4/6 | 3.97 | 63% | 5.1 |
+| Trailing 20% (next month) | −1.99 | +6.2 | +0.008 | 3/6 | 1.02 | 67% | 3.1 |
+| Trailing 10% (next month) | −4.67 | +14.9 | −0.042 | 1/6 | 3.54 | 64% | 3.2 |
+| Fixed 8% below entry (next month) | −0.64 | +0.5 | −0.013 | 0/6 | 0.33 | 69% | 0.8 |
+| 2.5 ATR below entry (next month) | −0.54 | +0.3 | −0.012 | 0/6 | 0.28 | 72% | 0.6 |
+| Time stop: losing after 60 days (next month) | −0.37 | +0.1 | −0.015 | 0/6 | 0.19 | 70% | 0.3 |
+| Trailing 10% (new 20-day high) | −7.52 | +24.5 | −0.140 | 0/6 | 2.70 | 64% | 3.3 |
+| Chandelier, 22-day high − 3 ATR (new 20-day high) | −8.59 | +25.4 | −0.200 | 0/6 | 4.46 | 63% | 3.0 |
+| Close below 50-day avg (close above) | −8.59 | +22.3 | −0.255 | 0/6 | 8.46 | 62% | 2.6 |
+| Chandelier, 22-day high − 3 ATR (next month) | −9.42 | +22.8 | −0.280 | 0/6 | 7.85 | 63% | 2.4 |
 
-*Averages over the six test sets. The last column is computed for this report: drawdown improvement divided by return given up.*
+*Averages over the six test sets. Sharpe ratios use returns above T-bills (corrected on 2026-11-21; an earlier draft used raw returns, which overstated the Sharpe gains of rules that spend time in cash). The last column is computed for this report: drawdown improvement divided by return given up.*
 
-The results fall into three tiers. **Wide trailing stops (20–30%) and the 200-day-average exit buy drawdown protection most cheaply**, at more than 5 points of shallower worst loss per point of annual return given up, and they raise the Sharpe ratio slightly. **Tight rules buy the same protection at twice the price.** The 10% trailing stop, the 3-ATR chandelier and the 50-day average cut drawdowns by 22–25 points, but they cost 7.5–9.4 points of return and lowered the Sharpe ratio, because they fired 2.7–8.5 times per stock per year on ordinary noise. **Stops measured from the entry price (fixed 8–25%, 2.5 ATR, 60-day time stop) barely matter either way.** A stock bought at the start and held rarely falls 8–25% below its purchase price and stays there, so these stops fired 0.07–0.33 times a year and changed returns by less than 1.1 points. Stop-outs also did not flag stocks that kept falling. **In 62–72% of cases the stock was higher 60 trading days later**, by 3.5% to 23.4% on average depending on the rule.
+The results fall into three tiers. **Wide trailing stops (20–30%) and the 200-day-average exit buy drawdown protection most cheaply**, at more than 5 points of shallower worst loss per point of annual return given up. The trailing stops nudge the Sharpe ratio up slightly (+0.02 to +0.03); the 200-day exit leaves it slightly lower. **Tight rules buy the same protection at twice the price.** The 10% trailing stop, the 3-ATR chandelier and the 50-day average cut drawdowns by 22–25 points, but they cost 7.5–9.4 points of return and lowered the Sharpe ratio, because they fired 2.7–8.5 times per stock per year on ordinary noise. **Stops measured from the entry price (fixed 8–25%, 2.5 ATR, 60-day time stop) barely matter either way.** A stock bought at the start and held rarely falls 8–25% below its purchase price and stays there, so these stops fired 0.07–0.33 times a year and changed returns by less than 1.1 points. Stop-outs also did not flag stocks that kept falling. **In 62–72% of cases the stock was higher 60 trading days later**, by 3.5% to 23.4% on average depending on the rule.
 
-The headline "sets won on Sharpe" figures hide a regime effect. The wide-stop Sharpe gains came almost entirely from 2003–2014, the period that includes 2008. In that period the 20% trailing stop with 20-day-high re-entry beat buy-and-hold on Sharpe in all three stock groups (0.91, 0.89 and 0.83 versus 0.81, 0.76 and 0.73) and cut worst drawdowns from about −52–54% to about −41–43%. The 200-day exit was more dramatic: drawdowns of −23% to −28% instead of −52% to −54%, and Sharpe up to 1.09. In the 2015–2026 bull market, both rules won on Sharpe in only one of three groups. The 200-day exit roughly halved returns on the held-out stocks (4.67% versus 11.37% a year). That is the regime dependence the literature predicts: stops pay for themselves in long, volatile bear markets and cost money otherwise. Nobody knows in advance which kind of decade is coming.
+The headline "sets won on Sharpe" figures hide a regime effect. The wide-stop Sharpe gains came almost entirely from 2003–2014, the period that includes 2008. In that period the 20% trailing stop with 20-day-high re-entry beat buy-and-hold on Sharpe in all three stock groups (0.81, 0.81 and 0.74 versus 0.74, 0.70 and 0.66) and cut worst drawdowns from about −52–54% to about −41–43%. The 200-day exit was more dramatic: drawdowns of −23% to −28% instead of −52% to −54%, and Sharpe up to 0.97. In the 2015–2026 bull market, both rules won on Sharpe in only one of three groups. The 200-day exit roughly halved returns on the held-out stocks (4.67% versus 11.37% a year). That is the regime dependence the literature predicts: stops pay for themselves in long, volatile bear markets and cost money otherwise. Nobody knows in advance which kind of decade is coming.
 
 | Published finding | Source | App result |
 |---|---|---|
 | Under a random walk, stops lower expected return | Kaminski & Lo | All 20 rules lowered return; none won on return in more than 1 of 6 sets |
 | Tight stops significantly lower returns via costs and short-term reversal | Lo & Remorov | 10% trailing, chandelier and 50-day rules cost 4.7–9.4 pts/yr; most stock prices were higher 60 days after a stop-out |
-| Wide stops roughly match buy-and-hold risk-adjusted | Lo & Remorov | 20–30% trailing: Sharpe +0.02 to +0.06 |
-| Trailing stops under 10% lose their downside benefit after costs; 10–20% keep it | Dai et al. 2021 | 10% trailing cut drawdowns but left Sharpe flat to lower; 20–30% improved both |
+| Wide stops roughly match buy-and-hold risk-adjusted | Lo & Remorov | 20–30% trailing: Sharpe +0.01 to +0.03 |
+| Trailing stops under 10% lose their downside benefit after costs; 10–20% keep it | Dai et al. 2021 | 10% trailing cut drawdowns but lowered Sharpe; 20–30% cut drawdowns with Sharpe roughly unchanged |
 | Stops help most in declining markets and regimes | Dai et al.; Lo & Remorov | Sharpe gains concentrated in 2003–2014 |
 | A trend filter is the best stop; monthly rules beat frequent ones | Alpha Architect; Clare et al. | Daily 200-day rule on single stocks gave the largest drawdown cut but 4 round trips a year and −4.8 pts/yr; monthly or index-level versions were not tested |
 | Stops help momentum and lottery-like stocks | Han, Zhou & Zhu; Dai et al. 2023 | Not tested |
@@ -133,7 +133,7 @@ Turnover, leverage and chart systems complete the list. The most active fifth of
 | Decision | Evidence-based default | Basis |
 |---|---|---|
 | What a stop is for | Limiting drawdowns and forcing discipline; not a source of return | Kaminski & Lo; Lo & Remorov; Dai et al.; app test (all 20 rules lowered return) |
-| Stop for long-term holdings | Trailing 20–30% below the highest close | App: lowest cost per drawdown point, Sharpe +0.04–0.06; Dai et al.: 10–20% keeps the downside benefit after costs |
+| Stop for long-term holdings | Trailing 20–30% below the highest close | App: lowest cost per drawdown point, Sharpe +0.02–0.03; Dai et al.: 10–20% keeps the downside benefit after costs |
 | Stops to avoid on large single stocks | Trailing stops under 10–15%, 22-day/3-ATR chandelier, 50-day-average exits | App: −7.5 to −9.4 pts/yr, 2.7–8.5 stop-outs per stock per year |
 | Re-entry | Alert on a new 20-day high after a trailing stop-out | App: double the drawdown cut versus calendar re-entry |
 | When to check and act | At the daily close; act next session with a limit order | Lo & Remorov one-day-delay result; flash-crash and gap evidence |

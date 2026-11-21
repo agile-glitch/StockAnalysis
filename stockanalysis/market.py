@@ -10,10 +10,11 @@ test in recent years:
 * Otherwise stay invested, but scale down when the market is turbulent:
   exposure = 15% / recent S&P 500 volatility, capped at 100%.
 
-Over 2006-2026 this kind of rule cut the worst loss by roughly half, with a
-similar return per unit of risk, but about 2-3 percentage points a year less
-total return than always staying invested, because it misses some of the
-fastest rebounds.
+On stocks never used for tuning, 2006-2026, this rule's worst loss was -31%
+against -55% for staying invested, at about 2 points a year less return. That
+rule was picked with hindsight, though: choosing rules year by year with only
+past data cut the worst loss to -45% (vs -55%) with a slightly lower return per
+unit of risk. Expect smaller crashes and some missed rebounds, not more money.
 """
 
 from __future__ import annotations

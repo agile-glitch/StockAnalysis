@@ -135,7 +135,8 @@ class Engine:
             if not market["risk_on"]:
                 plan["notes"].append(
                     "The overall market is in a downtrend. In the historical test, stepping aside in market "
-                    "downtrends cut crash losses by about half; consider waiting.")
+                    "downtrends reduced crash losses (though it missed some fast rebounds); consider waiting "
+                    "or buying a smaller position.")
             elif market["exposure_pct"] < 90:
                 plan["notes"].append(
                     f"The market is turbulent: the market risk indicator suggests keeping about "
@@ -202,6 +203,7 @@ class Engine:
                 "sma50": _round_list(tail["sma50"]),
                 "sma200": _round_list(tail["sma200"]),
             },
+            "my_tactic": self._my_tactic(frame, settings),
             "spark": _round_list(frame["close"].iloc[-60:]),
             "position": position,
             "problems": problems,
@@ -255,6 +257,19 @@ class Engine:
             if event["kind"] == "trend_break" and cur.get("position"):
                 body += " You hold this stock: this is a sell signal for the position."
             push(event["kind"], event["direction"], event["title"], body, f"{event['kind']}:{event['date']}")
+
+        # 2b. The user's own indicator tactic flipped.
+        mine = cur.get("my_tactic")
+        if mine and mine["changed_today"]:
+            if mine["holding"]:
+                push("my_tactic_buy", "bullish", f"Your indicator says buy ({mine['label']})",
+                     f"Closed at ${cur['price']:,.2f}. This is your own Indicator Lab tactic. In the historical "
+                     "test no indicator setting beat holding on unseen stocks, so treat it as a prompt to look, "
+                     "not a proven edge.", f"my_tactic:{mine['label']}:buy:{day}")
+            else:
+                push("my_tactic_sell", "bearish", f"Your indicator says sell ({mine['label']})",
+                     f"Closed at ${cur['price']:,.2f}. Your own Indicator Lab tactic has switched to cash.",
+                     f"my_tactic:{mine['label']}:sell:{day}")
 
         # 3. A held position closed below its stop, or 20% below its best close since buying.
         position = cur.get("position")
@@ -389,6 +404,21 @@ class Engine:
             self._scan_lock.release()
         return self.status
 
+    @staticmethod
+    def _my_tactic(frame, settings: dict) -> dict | None:
+        """State of the user's own indicator tactic (from the Indicator Lab) on this stock."""
+        mine = settings.get("my_tactic") or {}
+        if not mine.get("tactic"):
+            return None
+        from . import tactics as T
+        close = frame[["close"]]
+        held = T.positions(mine["tactic"], mine.get("params"), close)["close"]
+        now, before = bool(held.iloc[-1]), bool(held.iloc[-2]) if len(held) > 1 else False
+        changes = held.ne(held.shift(1)) & held.index.isin(held.index[1:])
+        last_change = held.index[changes][-1].date().isoformat() if changes.any() else None
+        return {"tactic": mine["tactic"], "label": T.describe(mine["tactic"], mine.get("params")),
+                "holding": now, "changed_today": now != before, "since": last_change}
+
     def update_market(self, notify: bool = True):
         """Refresh the market risk indicator and alert when it flips."""
         from .market import market_regime
@@ -415,7 +445,7 @@ class Engine:
             else:
                 title, body = "Market turned risk-off", (
                     "The S&P 500 is below its 200-day average and lagging T-bills over 12 months. In the "
-                    "historical test, moving to cash at this point cut crash losses by about half, "
+                    "historical test, moving to cash at this point reduced crash losses (for example 2008), "
                     "at the cost of missing some fast rebounds.")
             self.db.add_notification(symbol=None, kind="market_regime", tone=market["tone"], title=title, body=body,
                                      dedup_key=f"market_regime:{market['as_of']}:{market['risk_on']}")
@@ -455,6 +485,7 @@ class Engine:
             "option": ideas[0]["strategy"] if ideas else None,
             "spark": a["spark"],
             "held": bool(a.get("position")),
+            "my_tactic": a.get("my_tactic"),
             "stale": bool(a.get("stale")),
             "as_of": a["as_of"],
         }

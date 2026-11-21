@@ -62,12 +62,15 @@ def _daily_returns(p: Panel, rules: MonthlyRules) -> pd.Series:
     return curve.pct_change().fillna(0.0)
 
 
-def _sharpe(r: pd.Series) -> float:
+def _sharpe(r: pd.Series, cash: pd.Series | None = None) -> float:
     r = r.dropna()
+    if cash is not None:
+        r = r - cash.reindex(r.index).fillna(0.0)
     return float(r.mean() / r.std() * math.sqrt(252)) if len(r) > 20 and r.std() > 0 else -9.0
 
 
 def walk_forward(dev_panels: dict[str, Panel], test_panels: dict[str, Panel]) -> dict:
+    cash = next(iter(dev_panels.values())).cash_series()
     dev = {name: {c.name: _daily_returns(p, c) for c in CANDIDATES} for name, p in dev_panels.items()}
     test = {name: {c.name: _daily_returns(p, c) for c in CANDIDATES} for name, p in test_panels.items()}
     last_year = max(s.index.max().year for d in test.values() for s in d.values())
@@ -77,7 +80,7 @@ def walk_forward(dev_panels: dict[str, Panel], test_panels: dict[str, Panel]) ->
         cutoff = pd.Timestamp(f"{year}-01-01")
         scores = {}
         for c in CANDIDATES:
-            values = [_sharpe(d[c.name][d[c.name].index < cutoff]) for d in dev.values()]
+            values = [_sharpe(d[c.name][d[c.name].index < cutoff], cash) for d in dev.values()]
             scores[c.name] = float(np.mean(values))
         picks[str(year)] = max(scores, key=scores.get)
 
@@ -93,8 +96,8 @@ def walk_forward(dev_panels: dict[str, Panel], test_panels: dict[str, Panel]) ->
         wf_curve, hold_curve = (1 + wf).cumprod(), (1 + hold).cumprod()
         weekly = pd.DataFrame({"walk_forward": wf_curve, "buy_and_hold": hold_curve}).resample("W-FRI").last().dropna()
         out["panels"][name] = {
-            "walk_forward": curve_metrics(wf_curve),
-            "buy_and_hold": curve_metrics(hold_curve),
+            "walk_forward": curve_metrics(wf_curve, cash),
+            "buy_and_hold": curve_metrics(hold_curve, cash),
             "yearly": {"walk_forward": yearly_returns(wf_curve), "buy_and_hold": yearly_returns(hold_curve)},
             "curve": {"dates": [d.date().isoformat() for d in weekly.index],
                       "walk_forward": [round(v * 100, 2) for v in weekly["walk_forward"]],
@@ -107,6 +110,6 @@ def walk_forward(dev_panels: dict[str, Panel], test_panels: dict[str, Panel]) ->
         for name, d in {**dev, **test}.items():
             r = d[c.name]
             r = r[r.index >= pd.Timestamp(f"{FIRST_TEST_YEAR}-01-01")]
-            row["panels"][name] = curve_metrics((1 + r).cumprod())
+            row["panels"][name] = curve_metrics((1 + r).cumprod(), cash)
         out["candidates"].append(row)
     return out

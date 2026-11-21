@@ -138,9 +138,9 @@ def portfolio_cell(panel: Panel, rules: Rules, start: str, end: str | None = Non
     curve = result["curve"]
     bench = benchmarks(panel, start, end)
     out = {
-        "strategy": {**curve_metrics(curve), **trade_metrics(result)},
-        "spy": curve_metrics(bench["spy"]),
-        "equal_weight": curve_metrics(bench["equal_weight"]),
+        "strategy": {**curve_metrics(curve, panel.cash_series()), **trade_metrics(result)},
+        "spy": curve_metrics(bench["spy"], panel.cash_series()),
+        "equal_weight": curve_metrics(bench["equal_weight"], panel.cash_series()),
         "yearly": {"strategy": yearly_returns(curve), "spy": yearly_returns(bench["spy"]),
                    "equal_weight": yearly_returns(bench["equal_weight"])},
     }

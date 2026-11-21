@@ -278,6 +278,7 @@ function lineChart({ dates, series, height = 280, yFormat = fmt.money, label }) 
 }
 
 function dataTable(columns, rows, options = {}) {
+  columns = columns.filter(Boolean);
   if (!rows.length) return h("div.empty", options.empty || "Nothing to show yet.");
   return h("div.table-wrap", h("table",
     h("thead", h("tr", columns.map((c) => h("th" + (c.right ? ".r" : "") + (c.hideSmall ? ".hide-sm" : ""), c.label)))),
@@ -319,6 +320,7 @@ const NAV = [
   ["earnings", "Earnings"],
   ["insiders", "Insider trades"],
   ["positions", "Positions"],
+  ["lab", "Indicator lab"],
   ["track", "Track record"],
   ["guide", "Strategy guide"],
   ["settings", "Settings"],
@@ -486,7 +488,7 @@ function marketCard(m, budget) {
         check(m.above_200, "S&P 500 " + (m.pct_from_200 >= 0 ? m.pct_from_200 + "% above" : Math.abs(m.pct_from_200) + "% below") + " its 200-day average"),
         check(m.momentum_ok, "12-month return " + fmt.pct(m.mom12_pct) + " vs " + m.tbill_pct.toFixed(1) + "% for T-bills"),
         check(m.vol20_pct <= m.vol_target_pct * 1.1, "Recent swings " + m.vol20_pct.toFixed(0) + "% a year (comfort level " + m.vol_target_pct + "%)"))),
-    h("p.muted.small", { style: "margin-top:8px" }, "This was the only part of the rules that held up in 20 years of testing: it roughly halved crash losses, but trailed always-invested by about 2–3% a year. Individual Buy/Sell ratings did not beat the market."));
+    h("p.muted.small", { style: "margin-top:8px" }, "In 20 years of testing this was the part that came closest to holding up: it made crashes smaller (worst loss −31% to −45% instead of −55%), but trailed always-invested by about 2–2.5% a year. Individual Buy/Sell ratings and indicator settings did not beat the market."));
 }
 
 /* ---- dashboard ---- */
@@ -560,6 +562,9 @@ function dashboardPage(root) {
       { label: "Score", cell: (w) => (w.error || w.pending ? "" : meter(w.score, 100, "Score from −100 (sell) to +100 (buy)")) },
       { label: "Main reason", hideSmall: true, cell: (w) => h("div.why.small", w.error || w.gate_note || w.reason || "") },
       { label: "Suggested trade", hideSmall: true, cell: (w) => suggestion(w) },
+      o.settings.my_tactic && o.settings.my_tactic.tactic ? { label: "My indicator", hideSmall: true, cell: (w) => (w.my_tactic
+          ? h("span", { title: w.my_tactic.label + (w.my_tactic.since ? " · since " + w.my_tactic.since : "") }, w.my_tactic.holding ? pill("bullish", "Hold") : pill("neutral", "Cash"))
+          : "") } : null,
       { label: "Next earnings", hideSmall: true, cell: (w) => (w.next_earnings ? h("div", h("div.nowrap", fmt.date(w.next_earnings)),
           h("div.small" + (w.earnings_days <= 7 ? "" : ".muted"), w.earnings_days <= 7 ? h("span.pill.warning", "! " + fmt.inDays(w.earnings_days)) : fmt.inDays(w.earnings_days))) : h("span.muted", "—")) },
       { label: "", cell: (w) => h("button.btn.ghost.small", { title: "Remove " + w.symbol, "aria-label": "Remove " + w.symbol,
@@ -1135,6 +1140,183 @@ function settingsPage(root) {
   return {};
 }
 
+/* ---- indicator lab ---- */
+function labPage(root) {
+  const body = h("div.stack");
+  fill(root, pageHead("Indicator lab", "Change an indicator's settings and see how it would have traded any stock over the last 10 years."), body);
+  let catalog = [], results = null, current = null, lastRun = null;
+
+  const symbolInput = h("input.input", { value: (state.overview && state.overview.watchlist[0] && state.overview.watchlist[0].symbol) || "AAPL",
+    "aria-label": "Ticker", style: "width:110px;text-transform:uppercase" });
+  const tacticSelect = h("select.input", { "aria-label": "Indicator" });
+  const paramHost = h("div.lab-params");
+  const resultHost = h("div");
+  const runBtn = h("button.btn.primary", { onclick: run }, "Run test");
+  const inputs = {};
+
+  function paramFields(t, values) {
+    fill(paramHost, t.params.map((p) => {
+      const v = values[p.key] ?? p.default;
+      let input;
+      if (p.kind === "bool") {
+        input = h("input", { type: "checkbox", checked: !!v });
+        inputs[p.key] = () => (input.checked ? 1 : 0);
+        return h("label.switch", { title: p.help }, input, p.label);
+      }
+      input = h("input", { type: "number", min: p.min, max: p.max, step: p.step, value: v, inputMode: "decimal" });
+      const slider = h("input", { type: "range", min: p.min, max: p.max, step: p.step, value: v, "aria-label": p.label });
+      slider.addEventListener("input", () => { input.value = slider.value; });
+      input.addEventListener("input", () => { slider.value = input.value; });
+      input.addEventListener("keydown", (e) => { if (e.key === "Enter") run(); });
+      slider.addEventListener("change", run);
+      inputs[p.key] = () => Number(input.value);
+      return h("div.field", h("label", p.label), h("div.row", { style: "flex-wrap:nowrap" }, slider, h("div.input-affix", { style: "width:90px;flex:none" }, input)),
+        p.help ? h("div.hint", p.help) : null);
+    }));
+  }
+
+  function selectTactic(key, values) {
+    current = catalog.find((t) => t.key === key);
+    tacticSelect.value = key;
+    for (const k of Object.keys(inputs)) delete inputs[k];
+    paramFields(current, values || {});
+    fill(tacticNote, current.summary, current.tested ? [" Tested-best settings: ", h("strong", current.tested.best_label), "."] : null);
+  }
+  const tacticNote = h("p.soft.small");
+  tacticSelect.addEventListener("change", () => { selectTactic(tacticSelect.value); run(); });
+
+  function params() {
+    const out = {};
+    for (const [k, get] of Object.entries(inputs)) out[k] = get();
+    return out;
+  }
+
+  async function run() {
+    if (!current) return;
+    runBtn.disabled = true; runBtn.textContent = "Testing…";
+    try {
+      lastRun = await api("/api/lab/run", { method: "POST", body: { symbol: symbolInput.value.trim().toUpperCase(), tactic: current.key, params: params() } });
+      fill(resultHost, renderRun(lastRun));
+    } catch (e) {
+      fill(resultHost, h("div.note.warn", e.message));
+    }
+    runBtn.disabled = false; runBtn.textContent = "Run test";
+  }
+
+  function renderRun(r) {
+    const s = r.strategy, hd = r.hold;
+    const better = (a, b, higher = true) => (a === null || b === null ? "" : (higher ? a > b : a < b) ? ".up" : ".down");
+    const price = lineChart({ dates: r.chart.dates, height: 240, label: r.symbol + " price, highlighted while the indicator holds it",
+      series: [
+        { name: "Price", color: "var(--axis)", values: r.chart.price },
+        { name: "Indicator holding", color: "var(--series-1)", values: r.chart.holding_price },
+      ] });
+    const growth = lineChart({ dates: r.chart.dates, height: 200, label: "Growth of $100", yFormat: (x) => "$" + (Math.round(x) || 0).toLocaleString("en-US"),
+      series: [
+        { name: r.label, color: "var(--series-1)", values: r.chart.strategy },
+        { name: "Buy and hold " + r.symbol, color: "var(--series-2)", values: r.chart.hold },
+      ] });
+    const row = (label, a, b, f, higher = true) => h("tr", h("td", label), h("td.r.num" + better(a, b, higher), f(a)), h("td.r.num", f(b)));
+    const pct = (x) => (x === null || x === undefined ? "—" : fmt.pct(x, 1));
+    return h("div.stack",
+      h("div.row", h("h3", r.symbol + ": " + r.label), r.holding_now ? pill("bullish", "Holding now") : pill("neutral", "In cash now"),
+        h("span.muted.small", r.start + " to " + r.end)),
+      h("div.grid-2",
+        h("div.table-wrap", h("table",
+          h("thead", h("tr", h("th", ""), h("th.r", "Indicator"), h("th.r", "Buy and hold"))),
+          h("tbody",
+            row("Yearly return", s.cagr_pct, hd.cagr_pct, pct),
+            row("Total return", s.total_return_pct, hd.total_return_pct, (x) => fmt.pct(x, 0)),
+            row("Worst drop", s.max_drawdown_pct, hd.max_drawdown_pct, pct),
+            row("Sharpe ratio", s.sharpe, hd.sharpe, (x) => (x === null || x === undefined ? "—" : x.toFixed(2)))))),
+        h("div.metrics",
+          h("div.metric", h("div.k", "Time holding"), h("div.v", r.stats.time_in_market_pct + "%")),
+          h("div.metric", h("div.k", "Trades"), h("div.v", r.stats.trades)),
+          h("div.metric", h("div.k", "Winning trades"), h("div.v", r.stats.win_rate_pct === null ? "—" : r.stats.win_rate_pct + "%")),
+          h("div.metric", h("div.k", "Average trade"), h("div.v", r.stats.avg_trade_pct === null ? "—" : fmt.pct(r.stats.avg_trade_pct, 2))),
+          r.open_trade ? h("div.metric", h("div.k", "Open trade"), h("div.v", fmt.pct(r.open_trade.return_pct, 1))) : null)),
+      price.legend, price.node, growth.legend, growth.node,
+      h("p.muted.small", "Signals use each day's close and trade at the next open, with 0.1% cost per trade; cash earns T-bill interest. One stock over one decade is a tiny sample: a setting that looks great here is usually luck. Compare with the tested results below."),
+      r.trades.length ? h("details", h("summary.small", "Recent trades (" + r.trades.length + ")"),
+        dataTable([
+          { label: "Bought", cell: (t) => fmt.date(t.entry_date) + " @ " + fmt.money(t.entry) },
+          { label: "Sold", cell: (t) => fmt.date(t.exit_date) + " @ " + fmt.money(t.exit) },
+          { label: "Days", right: true, cell: (t) => t.days },
+          { label: "Return", right: true, cell: (t) => h("span." + signClass(t.return_pct), fmt.pct(t.return_pct, 1)) },
+        ], r.trades)) : null);
+  }
+
+  async function saveAlert() {
+    if (!current) return;
+    await api("/api/settings", { method: "PUT", body: { my_tactic: { tactic: current.key, params: params() } } });
+    await refreshOverview();
+    renderMine();
+    toast({ title: "Saved as your indicator alert", body: "You'll get an alert when it says buy or sell on any stock in your watchlist.", tone: "bullish" });
+  }
+
+  const mineHost = h("div");
+  function renderMine() {
+    const mine = state.overview.settings.my_tactic;
+    if (!mine || !mine.tactic) {
+      fill(mineHost, h("p.soft.small", "No indicator alert saved. Set up a tactic above and choose “Use as my alert” to get buy and sell alerts for your watchlist."));
+      return;
+    }
+    const t = catalog.find((x) => x.key === mine.tactic);
+    fill(mineHost, h("div.row", h("span", "Your alert: ", h("strong", t ? t.name : mine.tactic), " ", h("span.soft", JSON.stringify(mine.params).replace(/[{}"]/g, "").replace(/,/g, ", "))),
+      h("button.btn.small", { onclick: () => { selectTactic(mine.tactic, mine.params); run(); } }, "Load"),
+      h("button.btn.small.ghost", { onclick: async () => { await api("/api/settings", { method: "PUT", body: { my_tactic: {} } }); await refreshOverview(); renderMine(); } }, "Remove")));
+  }
+
+  function findingsCard() {
+    if (!results) return null;
+    const fams = results.families;
+    const edge = (x) => h("span." + signClass(x), (x > 0 ? "+" : x < 0 ? "−" : "") + Math.abs(x).toFixed(2));
+    const anyHeld = fams.some((f) => f.validation_edge > 0 && f.test_edge > 0);
+    return h("section.card",
+      h("div.card-head", h("h2", "What testing found"), h("p", results.settings_total + " settings across " + fams.length + " indicators, " +
+        (results.groups.train + results.groups.holdout + results.groups.test) + " stocks, 2003–2026")),
+      h("div.note" + (anyHeld ? "" : ".warn"), { style: "margin-bottom:10px" },
+        anyHeld ? "Some settings held up on unseen data; see the table." :
+          "No indicator setting beat simply holding the same stocks on data it was not tuned on. Settings that looked best in training lost their edge on new stocks and later years, the same overfitting that happens when a model memorises its training data."),
+      dataTable([
+        { label: "Indicator", cell: (f) => h("div", h("div", f.name), h("div.small.muted", f.style === "trend" ? "Trend" : "Mean reversion")) },
+        { label: "Best settings in training", cell: (f) => h("span.small", f.best_label) },
+        { label: "Training", right: true, cell: (f) => edge(f.train_edge) },
+        { label: "Unseen data", right: true, cell: (f) => edge(f.validation_edge) },
+        { label: "New stocks", right: true, cell: (f) => edge(f.test_edge) },
+        { label: "Rankings agree?", right: true, hideSmall: true, cell: (f) => h("span", { title: "How well the training ranking of settings predicted the unseen-data ranking (1 = perfectly, 0 = not at all)" }, f.rank_corr_train_vs_validation.toFixed(2)) },
+        { label: "S&P 500 timing (Sharpe vs hold)", right: true, hideSmall: true, cell: (f) => h("span.small",
+            ["2003_2014", "2015_now"].map((p) => f.spy[p].sharpe.toFixed(2) + " vs " + f.spy[p].hold.sharpe.toFixed(2)).join(" · ")) },
+      ], fams),
+      h("p.muted.small", { style: "margin-top:8px" }, "Edge = Sharpe ratio (returns above T-bills) minus that of holding the same stocks, with the tactic trading one shared pot of money across all signalling stocks (max 10% each). Training: 2003–2014 on " + results.groups.train +
+        " stocks. Unseen data: other stocks and later years. New stocks: " + results.groups.test + " stocks used for nothing else. On the S&P 500 itself, trend indicators beat holding in 2003–2014 (thanks to 2008) and lagged since 2015."));
+  }
+
+  Promise.all([api("/api/lab/tactics"), api("/api/lab/results").catch(() => null)]).then(([cat, res]) => {
+    catalog = cat; results = res;
+    fill(tacticSelect, catalog.map((t) => h("option", { value: t.key }, t.name)));
+    const mine = state.overview.settings.my_tactic;
+    selectTactic(mine && mine.tactic ? mine.tactic : "ma_cross", mine && mine.tactic ? mine.params : {});
+    fill(body,
+      h("section.card",
+        h("div.card-head", h("h2", "Try it"), h("p", "Settings work like a model's weights: change them and see what happens")),
+        h("div.row", { style: "align-items:flex-end;margin-bottom:10px" },
+          h("div.field", h("label", "Stock"), symbolInput), h("div.field", { style: "flex:1;min-width:200px" }, h("label", "Indicator"), tacticSelect)),
+        tacticNote, paramHost,
+        h("div.row", { style: "margin-top:12px" }, runBtn,
+          h("button.btn", { onclick: () => { selectTactic(current.key, current.tested ? current.tested.best_params : {}); run(); } }, "Use tested-best settings"),
+          h("button.btn", { onclick: () => { selectTactic(current.key, {}); run(); } }, "Reset to defaults"),
+          h("button.btn", { onclick: saveAlert }, "Use as my alert")),
+        h("div", { style: "margin-top:16px" }, resultHost)),
+      h("section.card", h("div.card-head", h("h2", "My indicator alert")), mineHost),
+      findingsCard());
+    renderMine();
+    run();
+  }).catch((e) => fill(body, h("div.card", h("div.empty", e.message))));
+  symbolInput.addEventListener("keydown", (e) => { if (e.key === "Enter") run(); });
+  return {};
+}
+
 /* ---- track record (historical validation) ---- */
 const CELL_LABELS = {
   train_2015_now: ["Later years", "Same stocks, 2015 to today: years the rules were never tuned on"],
@@ -1282,9 +1464,10 @@ function trackRecordPage(root) {
           h("li", h("strong", "Every version of the rules made money"), " in every period tested."),
           h("li", h("strong", "Individual Buy and Sell ratings did not beat the market."), " New Buy signals beat the S&P 500 about half the time, like a coin flip, across " +
             fmt.num(r.signal_study.train_2015_now.events.find((e) => e.kind === "buy" && e.horizon === 60).signals) + "+ signals per period."),
-          h("li", h("strong", "Market risk control held up."), " Stepping back when the whole market was in a downtrend or very turbulent cut the worst loss from " +
-            ex.buy_and_hold.max_drawdown_pct + "% to " + ex.walk_forward.max_drawdown_pct + "% on stocks the rules never saw, with a similar return per unit of risk (Sharpe " +
-            ex.walk_forward.sharpe + " vs " + ex.buy_and_hold.sharpe + ")."),
+          h("li", h("strong", "Market risk control made crashes smaller, but did not improve returns."), " Stepping back when the whole market was in a downtrend or very turbulent cut the worst loss from " +
+            ex.buy_and_hold.max_drawdown_pct + "% to " + ex.walk_forward.max_drawdown_pct + "% on stocks the rules never saw, with " +
+            (ex.walk_forward.sharpe >= ex.buy_and_hold.sharpe ? "a similar or better" : "a similar or slightly lower") +
+            " return per unit of risk (Sharpe " + ex.walk_forward.sharpe + " vs " + ex.buy_and_hold.sharpe + ", measured above T-bill returns)."),
           h("li", h("strong", "It did not make more money than holding."), " It earned " + ex.walk_forward.cagr_pct + "% a year against " + ex.buy_and_hold.cagr_pct +
             "% for always staying invested, because it missed some fast rebounds (2019, 2020, 2023)."),
           h("li", "So the app now shows a ", h("a", { href: "#/dashboard" }, "market risk indicator"), " with a suggested share of your budget in stocks, and treats single-stock ratings as information rather than a trading system."))));
@@ -1431,7 +1614,7 @@ function guidePage(root) {
 /* ------------------------------ router & polling ------------------------------ */
 const ROUTES = {
   dashboard: dashboardPage, alerts: alertsPage, news: newsPage, earnings: earningsPage,
-  insiders: insidersPage, positions: positionsPage, settings: settingsPage, guide: guidePage, track: trackRecordPage,
+  insiders: insidersPage, positions: positionsPage, settings: settingsPage, guide: guidePage, track: trackRecordPage, lab: labPage,
 };
 
 function mountRoute() {

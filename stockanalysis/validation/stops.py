@@ -220,7 +220,8 @@ def run() -> dict:
         row = {"name": rule.name, "family": rule.family, "kind": rule.kind, "reentry": rule.reentry, "cells": {}}
         for cell, (g, start, end) in CELLS.items():
             res = simulate_stops(panels[g], rule, start, end)
-            row["cells"][cell] = {**curve_metrics(res["curve"]), **{k: v for k, v in res.items() if k not in ("curve", "rule")}}
+            cash = pd.Series(panels[g].cash_rate, index=panels[g].dates)
+            row["cells"][cell] = {**curve_metrics(res["curve"], cash), **{k: v for k, v in res.items() if k not in ("curve", "rule")}}
         results.append(row)
         log.info("%s done", rule.name)
 
