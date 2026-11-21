@@ -1725,9 +1725,9 @@ function trackRecordPage(root) {
       ], Object.entries(c.by_type).map(([kind, t]) => ({ kind, ...t }))),
       h("p.small", { style: "margin-top:8px" }, h("strong", "Best of " + c.combinations.toLocaleString() + " in training: "), c.best.label,
         ". Edge: training ", edge(c.best.train_edge), ", unseen data ", edge(c.best.val_edge), ", fresh stocks ", edge(c.best.test_edge), "."),
-      h("p.small", "Luck check (deflated Sharpe ratio): picking the best of " + d.trials.toLocaleString() + " tries produces a Sharpe of about " +
-        d.luck_threshold_annual.toFixed(2) + " by luck alone; the winner scored " + d.sharpe_annual.toFixed(2) + ". Probability its edge is real: " +
-        Math.round(d.probability_real * 100) + "% (it would look " + Math.round(d.probability_real_if_one_trial * 100) + "% certain if it were the only rule tried)."),
+      h("p.small", "Luck check (deflated Sharpe ratio): its better training score came from holding less risk; its return minus holding's had a Sharpe of " +
+        d.sharpe_annual.toFixed(2) + " even in training, against about " + d.luck_threshold_annual.toFixed(2) + " that the best of " + d.trials.toLocaleString() +
+        " tries would reach by luck. Probability it really beats holding: " + Math.round(d.probability_real * 100) + "%."),
       h("p.small", h("strong", "Adopted: " + (c.adopt ? "yes" : "no") + ". "), "Rules fixed before running: change the app only if it beats holding on the fresh stocks in both periods and the result is statistically significant."));
   }
 

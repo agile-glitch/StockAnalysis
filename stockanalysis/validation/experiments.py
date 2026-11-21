@@ -418,7 +418,9 @@ def write_markdown(r: dict) -> str:
            "## 1. Fitting the score's weights", "",
            f"A ridge regression learned the weights from {w['fit']['samples']:,} stock-months of training data "
            f"(penalty {w['fit']['alpha']:g}, chosen by leave-one-year-out cross-validation). Weights are scaled so "
-           "their sizes add up to 100, like the app's.", "",
+           "their sizes add up to 100, like the app's. Cross-validated ranking skill inside the training years was "
+           f"{max(w['fit']['cv_ic'].values()):+.3f} at best: the signals had nothing reliable to learn even before "
+           "any test data was used.", "",
            "| Model | " + " | ".join(FEATURE_LABELS[k] for k in FEATURES) + " |", "| --- " * (len(FEATURES) + 1) + "|"]
     for m in w["models"][:3]:
         out.append(f"| {m['name']} | " + " | ".join(f"{m['weights'][k]:+.0f}" for k in FEATURES) + " |")
@@ -440,7 +442,16 @@ def write_markdown(r: dict) -> str:
         out.append(f"- {names[k]}: {x['top']['cagr_pct']:+.1f}% / {x['top']['max_drawdown_pct']:.1f}% vs "
                    f"{x['hold']['cagr_pct']:+.1f}% / {x['hold']['max_drawdown_pct']:.1f}%")
     out += ["", f"Fresh-stock ranking skill, both periods pooled: t = {w['fresh_pooled_ic_t']:+.2f}. "
-            f"**Adopted in the app: {'yes' if w['adopt'] else 'no'}.**", "",
+            f"**Adopted in the app: {'yes' if w['adopt'] else 'no'}.**", ""]
+    recent = ["train_2015_now", "holdout_2015_now", "fresh_2015_now"]
+    steady = [m["name"] for m in w["models"] if sum((m["cells"][k]["ic_t"] or 0) >= 2 for k in recent) >= 2]
+    if steady:
+        out += ["Observation, found after the fact and so not a pre-registered result: "
+                + ", ".join(steady) + " ranked next-month returns with t of about 2 or more in most of the three "
+                "2015–2026 sets. The effect is small (rank correlation around 0.02) and did not make the top-15 "
+                "portfolio beat holding. With nine models and six test sets, one or two such results are expected "
+                "by chance; it is worth re-checking as more data arrives, not acting on.", ""]
+    out += [
             "## 2. Indicator combinations", "",
             f"{len(c['signals'])} indicator signals combined into {c['combinations']:,} rules (single, both agree, "
             "either, two of three). Each trades one shared pot of money across the stocks it holds (max 10% each), "
@@ -454,10 +465,12 @@ def write_markdown(r: dict) -> str:
     d = b["deflated_sharpe"]
     out += ["", f"**Best on training data:** {b['label']}. Training edge {b['train_edge']:+.2f}, unseen data "
             f"{b['val_edge']:+.2f}, fresh stocks {b['test_edge']:+.2f}.", "",
-            f"**Is the training winner real or luck?** Its training Sharpe over holding was {d['sharpe_annual']:.2f} a "
-            f"year. Picking the best of {d['trials']:,} tries would produce about {d['luck_threshold_annual']:.2f} "
-            f"by luck alone. Deflated Sharpe ratio: {d['probability_real']:.0%} probability the edge is real "
-            f"(it would look {d['probability_real_if_one_trial']:.0%} certain if it had been the only rule tried).", "",
+            f"**Is the training winner real or luck?** Its better training score came from taking less risk, not "
+            f"from earning more: its daily return minus holding's had a Sharpe ratio of {d['sharpe_annual']:+.2f} a "
+            f"year even in training. Picking the best of {d['trials']:,} tries would produce about "
+            f"{d['luck_threshold_annual']:+.2f} by luck alone. Deflated Sharpe ratio: {d['probability_real']:.0%} "
+            f"probability that it really beats holding (it would look {d['probability_real_if_one_trial']:.0%} "
+            "likely if it had been the only rule tried).", "",
             f"Across all combinations, training rank vs unseen-data rank correlation: {c['rank_corr_train_vs_validation']:+.2f}. "
             f"{c['share_beating_hold_in_validation']}% of combinations beat holding on unseen data.", "",
             f"**Adopted in the app: {'yes' if c['adopt'] else 'no'}.**", "",

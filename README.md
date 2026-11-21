@@ -112,8 +112,11 @@ indicator alert** to get buy and sell alerts for your watchlist.
 
 172 settings across 8 indicators were also fitted the machine-learning way
 (train on some stocks and years, validate and test on others). None beat
-holding on data they were not tuned on. See
-[docs/INDICATOR_LAB.md](docs/INDICATOR_LAB.md). To rerun:
+holding on data they were not tuned on. Two follow-up experiments, learning
+the score's weights by ridge regression and 560 indicator combinations, also
+failed on 92 fresh stocks, so the app's rules were left unchanged. See
+[docs/INDICATOR_LAB.md](docs/INDICATOR_LAB.md) and
+[docs/EXPERIMENTS.md](docs/EXPERIMENTS.md). To rerun:
 
 ```bash
 python -m stockanalysis.validation.lab
@@ -188,6 +191,7 @@ docs/STRATEGIES.md          research behind the rules
 docs/INSIDER_ALERTS.md      how to get insider-trade alerts, compared
 docs/VALIDATION.md          the historical test results (generated)
 docs/INDICATOR_LAB.md       indicator-settings test results (generated)
+docs/EXPERIMENTS.md         fitted weights and indicator combinations (generated)
 tests/                      pytest suite (runs offline on demo data)
 ```
 
