@@ -98,7 +98,10 @@ class Group:
         return self._bench[key]
 
     def evaluate(self, key: str, params: dict, start: str, end: str | None) -> dict:
-        held = T.positions(key, params, self.close)
+        return self.evaluate_held(T.positions(key, params, self.close), start, end)
+
+    def evaluate_held(self, held: pd.DataFrame, start: str, end: str | None, keep_returns: bool = False) -> dict:
+        """Score any hold/cash signal (one column per stock)."""
         rets = T.backtest(self.open, self.close, held, self.cash_rate)
         window = slice(start, end)
         alive = self.close.loc[start:].iloc[:5].notna().all()       # stocks trading at the start
@@ -108,8 +111,13 @@ class Group:
         slices = curve_metrics(T.basket_curve(r), self.cash_rate)
         pooled = curve_metrics((1 + T.pooled_returns(r, h, self.cash_rate)).cumprod(), self.cash_rate)
         stats = T.trade_stats(h)
-        return {**pooled, **stats, "hold": bench["pooled"], "stocks": len(cols),
-                "per_stock": {**slices, "hold": bench["slices"]}}
+        out = {**pooled, **stats, "hold": bench["pooled"], "stocks": len(cols),
+               "per_stock": {**slices, "hold": bench["slices"]}}
+        if keep_returns:   # daily pooled returns minus holding, for the deflated Sharpe ratio
+            hold_r = T.pooled_returns(self._hold.loc[window, cols], self.close.loc[window, cols].notna(),
+                                      self.cash_rate, max_weight=1.0)
+            out["_active"] = T.pooled_returns(r, h, self.cash_rate) - hold_r
+        return out
 
 
 def _edge(m: dict) -> float:

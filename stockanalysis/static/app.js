@@ -1456,6 +1456,7 @@ function trackRecordPage(root) {
   let which = "chosen";
   let report = null;
   let stops = null;
+  let experiments = null;
   const body = h("div.stack");
   fill(root, pageHead("Track record", "The rules replayed day by day on 20+ years of past prices, then checked against what happened next, on stocks and years they were not tuned on."), body);
 
@@ -1574,7 +1575,7 @@ function trackRecordPage(root) {
         h("li", "Past results do not guarantee future ones, and markets change once rules become popular.")),
       h("p.muted.small", { style: "margin-top:8px" }, "Run on " + new Date(r.generated).toLocaleString() + ". Rerun with: python -m stockanalysis.validation"));
 
-    fill(body, ...storyCards(r), stops ? stopsCard(stops) : null, h("h2", { style: "margin-top:12px;font-size:18px" }, "Round 1 in detail: the app's own Buy and Sell rules"),
+    fill(body, ...storyCards(r), experiments ? experimentsCard(experiments) : null, stops ? stopsCard(stops) : null, h("h2", { style: "margin-top:12px;font-size:18px" }, "Round 1 in detail: the app's own Buy and Sell rules"),
       h("div.row", rulesChips), summary, h("div.row", cellChips), portfolioCard, signalCard, yearCard, searchCard, caveats);
   }
 
@@ -1688,8 +1689,50 @@ function trackRecordPage(root) {
       h("p.muted.small", { style: "margin-top:8px" }, "Stops fill at the stop price, or at the open when a stock gaps below it. 10 basis points per trade; cash earns T-bill interest while stopped out. A positive drawdown difference means a shallower worst loss. Rerun with: python -m stockanalysis.validation.stops"));
   }
 
-  Promise.all([api("/api/validation"), api("/api/validation/stops").catch(() => null)])
-    .then(([r, st]) => { report = r; stops = st; render(); })
+  function experimentsCard(x) {
+    const w = x.weights, c = x.combinations;
+    const cells = ["train_2003_2014", ...x.validation_cells, ...x.test_cells];
+    const names = { train_2003_2014: "Training", holdout_2003_2014: "Held-out 03–14", train_2015_now: "Train stocks 15–26",
+      holdout_2015_now: "Held-out 15–26", fresh_2003_2014: "Fresh 03–14", fresh_2015_now: "Fresh 15–26" };
+    const edge = (v) => h("span." + signClass(v), (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(2));
+    const feats = ["trend", "momentum", "high52", "pullback", "macd", "earnings"];
+    const featNames = { trend: "Trend", momentum: "Momentum", high52: "52-wk high", pullback: "Pullback", macd: "MACD", earnings: "Earnings" };
+    const d = c.best.deflated_sharpe;
+    return h("section.card",
+      h("div.card-head", h("h2", "Experiments: fitted weights and indicator combinations"),
+        h("p", "Fresh test: " + x.groups.fresh + " stocks used in no earlier test")),
+      h("h3", { style: "margin:4px 0 6px" }, "1. Learning the score's weights from data"),
+      dataTable([
+        { label: "Weights", cell: (m) => m.name },
+        ...feats.map((k) => ({ label: featNames[k], right: true, hideSmall: true, cell: (m) => (m.weights[k] > 0 ? "+" : "") + Math.round(m.weights[k]) })),
+      ], w.models.slice(0, 3)),
+      h("p.small.soft", { style: "margin:10px 0 4px" }, "Top-15 portfolio, Sharpe ratio minus holding all the same stocks (monthly rebalance, with costs):"),
+      dataTable([
+        { label: "Model", cell: (m) => m.name },
+        ...cells.map((k) => ({ label: names[k], right: true, hideSmall: !k.startsWith("fresh"), cell: (m) => edge(m.cells[k].edge) })),
+        { label: "Ranking skill, fresh 15–26 (t)", right: true, hideSmall: true, cell: (m) => {
+          const v = m.cells.fresh_2015_now; return v.ic_mean === null ? "—" : v.ic_mean.toFixed(3) + " (" + v.ic_t.toFixed(1) + ")"; } },
+      ], w.models),
+      h("p.small", { style: "margin-top:6px" }, h("strong", "Adopted: " + (w.adopt ? "yes" : "no") + ". "),
+        "Fresh-stock ranking skill, both periods: t = " + w.fresh_pooled_ic_t.toFixed(2) + " (2 or more is significant)."),
+      h("h3", { style: "margin:16px 0 6px" }, "2. Combining indicators"),
+      dataTable([
+        { label: "Rule type", cell: (t) => t.kind },
+        { label: "Rules", right: true, cell: (t) => t.count },
+        { label: "Median training edge", right: true, cell: (t) => edge(t.median_train_edge) },
+        { label: "Median unseen-data edge", right: true, cell: (t) => edge(t.median_val_edge) },
+        { label: "Beat holding on unseen data", right: true, cell: (t) => t.share_beating_hold_in_validation + "%" },
+      ], Object.entries(c.by_type).map(([kind, t]) => ({ kind, ...t }))),
+      h("p.small", { style: "margin-top:8px" }, h("strong", "Best of " + c.combinations.toLocaleString() + " in training: "), c.best.label,
+        ". Edge: training ", edge(c.best.train_edge), ", unseen data ", edge(c.best.val_edge), ", fresh stocks ", edge(c.best.test_edge), "."),
+      h("p.small", "Luck check (deflated Sharpe ratio): picking the best of " + d.trials.toLocaleString() + " tries produces a Sharpe of about " +
+        d.luck_threshold_annual.toFixed(2) + " by luck alone; the winner scored " + d.sharpe_annual.toFixed(2) + ". Probability its edge is real: " +
+        Math.round(d.probability_real * 100) + "% (it would look " + Math.round(d.probability_real_if_one_trial * 100) + "% certain if it were the only rule tried)."),
+      h("p.small", h("strong", "Adopted: " + (c.adopt ? "yes" : "no") + ". "), "Rules fixed before running: change the app only if it beats holding on the fresh stocks in both periods and the result is statistically significant."));
+  }
+
+  Promise.all([api("/api/validation"), api("/api/validation/stops").catch(() => null), api("/api/validation/experiments").catch(() => null)])
+    .then(([r, st, ex]) => { report = r; stops = st; experiments = ex; render(); })
     .catch((e) => fill(body, h("section.card", h("div.empty", e.message))));
   return {};
 }

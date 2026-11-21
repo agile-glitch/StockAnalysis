@@ -355,6 +355,17 @@ def create_app(db: Database | None = None, provider: CachedProvider | None = Non
             pass
         return {"symbol": symbol, **lab_runner.run(df, body.tactic, body.params, tbill)}
 
+    @app.get("/api/validation/experiments")
+    def validation_experiments():
+        from .validation.experiments import BUNDLED as EXP_BUNDLED
+        from .validation.run import REPORT_DIR
+        path = REPORT_DIR / "experiments.json"
+        if not path.exists():
+            path = EXP_BUNDLED
+        if not path.exists():
+            raise HTTPException(404, "No experiments yet. Run: python -m stockanalysis.validation.experiments")
+        return FileResponse(path, media_type="application/json", headers={"Cache-Control": "no-cache"})
+
     @app.get("/api/validation/stops")
     def validation_stops():
         from .validation.run import REPORT_DIR
