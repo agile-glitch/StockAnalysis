@@ -31,11 +31,17 @@ DEFAULT_SETTINGS = {
     "my_tactic": {},
     # Secret in the TradingView webhook URL (generated on first use)
     "tv_webhook_token": "",
+    # 10-month trend rule alerts for markets (gold, oil, crypto...). None = the
+    # markets where testing found trend rules helped; [] = none.
+    "trend_alert_symbols": None,
+    # Month-end alerts when the 8-asset trend portfolio changes what it holds
+    "trend_portfolio_alerts": True,
 }
 
 TEXT_SETTINGS = {"sec_contact": 200, "push_url": 500, "tv_webhook_token": 100}
 CHOICE_SETTINGS = {"push_scope": ("insider", "all")}
-BOOL_SETTINGS = {"options_enabled", "insider_alert_sells", "insider_market_alerts"}
+BOOL_SETTINGS = {"options_enabled", "insider_alert_sells", "insider_market_alerts", "trend_portfolio_alerts"}
+MAX_TREND_ALERTS = 60
 
 SETTING_LIMITS = {
     "budget": (1.0, 1e9),
@@ -48,6 +54,24 @@ SETTING_LIMITS = {
     "insider_market_min_value": (0, 1e12),
 }
 INT_SETTINGS = {"refresh_minutes", "insider_poll_minutes"}
+
+def _symbol_list(value) -> list[str] | None:
+    if value is None:
+        return None
+    if not isinstance(value, (list, tuple)):
+        raise SettingsError("trend_alert_symbols must be a list of symbols")
+    from .symbols import SYMBOL_RE
+    out: list[str] = []
+    for raw in value:
+        symbol = str(raw or "").strip().upper()
+        if not SYMBOL_RE.match(symbol):
+            raise SettingsError(f"Not a ticker symbol: {raw}")
+        if symbol not in out:
+            out.append(symbol)
+    if len(out) > MAX_TREND_ALERTS:
+        raise SettingsError(f"At most {MAX_TREND_ALERTS} trend alerts")
+    return out
+
 
 DEFAULT_WATCHLIST = ["AAPL", "MSFT", "NVDA", "AMZN", "GOOGL", "TSLA"]
 
@@ -176,6 +200,9 @@ class Database:
                 raise SettingsError(f"Unknown setting: {key}")
             if key in BOOL_SETTINGS:
                 clean[key] = bool(value)
+                continue
+            if key == "trend_alert_symbols":
+                clean[key] = _symbol_list(value)
                 continue
             if key == "my_tactic":
                 if not value:

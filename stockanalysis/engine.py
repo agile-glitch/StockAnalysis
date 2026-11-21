@@ -61,6 +61,8 @@ class Engine:
         self._backtests: dict[tuple, dict] = {}
         self.status = {"scanning": False, "last_scan": None, "last_error": None}
         self.market: dict | None = None
+        from .trend_watch import TrendWatch
+        self.trend = TrendWatch(db, provider, today_fn=lambda: self.today())
 
     def today(self) -> date:
         return self._today_fn()
@@ -390,6 +392,10 @@ class Engine:
             if force:
                 self.provider.invalidate()
             self.update_market(notify)
+            try:
+                self.trend.update(notify)
+            except Exception:
+                log.exception("Trend alerts failed")
             symbols = self.db.watchlist()
             for stale in [s for s in self.analyses if s not in symbols]:
                 del self.analyses[stale]

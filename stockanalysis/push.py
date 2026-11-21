@@ -24,6 +24,8 @@ from urllib.parse import urlsplit
 log = logging.getLogger("stockanalysis.push")
 
 INSIDER_KINDS = {"insider_buy", "insider_buy_market", "insider_sell", "insider_cluster", "tradingview"}
+# Rare (a few a year) and actionable, so they go to the phone with the default scope too.
+TREND_KINDS = {"market_trend", "trend_portfolio", "market_regime"}
 TONE_TAGS = {"bullish": "chart_with_upwards_trend", "bearish": "chart_with_downwards_trend",
              "warning": "warning", "neutral": "bell", "info": "bell"}
 
@@ -79,7 +81,7 @@ class Pusher:
         settings = self._settings_fn()
         if not settings.get("push_url"):
             return False
-        return settings.get("push_scope") == "all" or note.get("kind") in INSIDER_KINDS
+        return settings.get("push_scope") == "all" or note.get("kind") in INSIDER_KINDS | TREND_KINDS
 
     def __call__(self, note: dict):
         """Database listener: queue a push for each new notification."""

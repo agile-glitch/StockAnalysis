@@ -950,12 +950,13 @@ function alertsPage(root) {
   let filter = "all";
   const list = h("div");
   const chips = h("div.chips");
-  const FILTERS = [["all", "All"], ["insider", "Insider trades"], ["tradingview", "TradingView"], ["bullish", "Buy side"], ["bearish", "Sell side"], ["warning", "Heads-up"]];
+  const FILTERS = [["all", "All"], ["insider", "Insider trades"], ["trend", "Market trends"], ["tradingview", "TradingView"], ["bullish", "Buy side"], ["bearish", "Sell side"], ["warning", "Heads-up"]];
 
   async function refresh() {
     const data = await api("/api/notifications?limit=300");
     const items = data.items.filter((n) => filter === "all" || (filter === "insider" ? n.kind.startsWith("insider")
-      : filter === "tradingview" ? n.kind === "tradingview" : n.tone === filter));
+      : filter === "tradingview" ? n.kind === "tradingview"
+      : filter === "trend" ? ["market_trend", "trend_portfolio", "market_regime"].includes(n.kind) : n.tone === filter));
     fill(chips, FILTERS.map(([key, label]) => h("button.chip" + (filter === key ? ".on" : ""), { onclick: () => { filter = key; refresh(); } }, label)));
     fill(list, items.length ? items.map((n) => notificationItem(n)) : h("div.empty", "No alerts here yet. They appear when a signal changes, earnings approach, or an insider buys."));
   }
@@ -1121,7 +1122,7 @@ function settingsPage(root) {
     return h("label.switch", input, label);
   };
   const scope = h("select.input", { id: "set-push_scope", onchange: update },
-    h("option", { value: "insider", selected: st.push_scope === "insider" }, "Insider trades and TradingView alerts"),
+    h("option", { value: "insider", selected: st.push_scope === "insider" }, "Insider trades, TradingView and market trend alerts"),
     h("option", { value: "all", selected: st.push_scope === "all" }, "Every alert"));
 
   const insiderStatus = h("div.note", "Checking…");
@@ -1267,6 +1268,64 @@ function marketsPage(root) {
   const body = h("div.stack", h("div.skeleton"));
   fill(root, pageHead("Markets", "Gold, silver, oil, bonds, currencies, crypto and stock indexes: live trend status and what 20 years of testing found."), body);
   let classFilter = "All";
+  let markets = null;
+  let trend = null;
+
+  async function setAlerts(symbols, extra = {}) {
+    try {
+      await api("/api/settings", { method: "PUT", body: { trend_alert_symbols: symbols, ...extra } });
+      trend = await api("/api/trend");
+      render();
+    } catch (err) {
+      toast({ title: "Could not change trend alerts", body: err.message, tone: "warning" });
+    }
+  }
+
+  function alertButton(sym) {
+    if (!trend) return "";
+    const list = trend.alerts.symbols;
+    const on = list.includes(sym);
+    return h("button.btn.small" + (on ? "" : ".ghost"), {
+      title: on ? "Alerts on: click to stop alerts for " + sym : "Get an alert when the 10-month rule changes for " + sym,
+      "aria-pressed": String(on),
+      onclick: (e) => { e.stopPropagation(); e.target.disabled = true; setAlerts(on ? list.filter((s) => s !== sym) : [...list, sym]); },
+    }, on ? "🔔 On" : "Off");
+  }
+
+  function trackerCard() {
+    if (!trend) return null;
+    const p = trend.portfolio;
+    const toggle = h("input", { type: "checkbox", checked: p.alerts_on, onchange: async (e) => {
+      try { await api("/api/settings", { method: "PUT", body: { trend_portfolio_alerts: e.target.checked } }); }
+      catch (err) { e.target.checked = !e.target.checked; toast({ title: "Could not change the setting", body: err.message, tone: "warning" }); }
+    } });
+    const pending = p.assets.filter((a) => a.signal && a.signal.flip_pending);
+    const changes = p.changes.slice(0, 8);
+    return h("section.card",
+      h("div.card-head", h("h2", "Your trend portfolio"), h("p", "The 8-asset 10-month rule, sized to your " + fmt.money0(p.budget) + " budget")),
+      h("div.row", { style: "justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:10px" },
+        h("div.soft", "Holding ", h("strong", p.holding.length + " of " + p.assets.length), ": ", h("strong", fmt.money0(p.invested)), " invested, ",
+          h("strong", fmt.money0(p.cash)), " in cash or T-bills (" + fmt.money0(p.slot) + " per asset)."),
+        h("label.switch", toggle, "Alert me when it changes")),
+      dataTable([
+        { label: "Asset", cell: (a) => h("div", h("a.sym", { href: "#/stock/" + encodeURIComponent(a.symbol) }, a.name), h("div.sym-name", a.symbol)) },
+        { label: "Rule says", cell: (a) => (!a.signal ? h("span.muted.small", "No data") : h("div",
+            a.signal.holding ? pill("bullish", "Hold") : pill("bearish", "Cash"),
+            h("div.small", { style: "margin-top:3px" }, h("span." + signClass(a.signal.gap_pct), fmt.pct(a.signal.gap_pct, 1)), h("span.muted", " vs average")))) },
+        { label: "Amount", right: true, cell: (a) => (a.amount ? fmt.money0(a.amount) : h("span.muted", "$0")) },
+        { label: "Since", right: true, hideSmall: true, cell: (a) => (a.signal ? fmt.date(a.signal.since) : "—") },
+        { label: "At month end", hideSmall: true, cell: (a) => (!a.signal ? "" : a.signal.flip_pending
+            ? h("span.tag", { style: "background:var(--warn-wash);color:var(--ink)" }, a.signal.holding ? "Would sell if it ends here" : "Would buy if it ends here")
+            : h("span.muted.small", "No change")) },
+      ], p.assets),
+      h("p.small", { style: "margin-top:8px" }, h("strong", "Next check: "), "after the close on " + fmt.date(p.next_check) +
+        " (the month's last trading day). " + (pending.length ? pending.length + " asset" + (pending.length > 1 ? "s are" : " is") + " on the other side of the average right now, so a change is possible." : "No asset is near a change right now.")),
+      changes.length ? h("div", { style: "margin-top:10px" }, h("h3.small", "Recent changes"),
+        h("ul.small.soft", { style: "margin:4px 0 0;padding-left:18px" }, changes.map((c) => h("li", fmt.date(c.date) + ": ",
+          c.bought.length ? h("span.up", "bought " + c.bought.join(", ")) : null, c.bought.length && c.sold.length ? "; " : null,
+          c.sold.length ? h("span.down", "sold " + c.sold.join(", ")) : null, " (holding " + c.holding + ")")))) : null,
+      h("p.muted.small", { style: "margin-top:8px" }, "Prices are checked once a month. In the 2007–2026 test below this portfolio had by far the smallest crashes but earned less than a plain 60/40 mix. Amounts are a guide: round to whole shares, and in a taxable account selling can trigger taxes."));
+  }
 
   function edge(v) { return h("span." + signClass(v), (v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v).toFixed(2)); }
 
@@ -1275,7 +1334,7 @@ function marketsPage(root) {
     const rows = data.markets.filter((m) => classFilter === "All" || m.class === classFilter);
     const watched = new Set((state.overview ? state.overview.watchlist : []).map((w) => w.symbol));
     return h("div.stack",
-      h("div.chips", classes.map((c) => h("button.chip" + (classFilter === c ? ".on" : ""), { onclick: () => { classFilter = c; render(data); } }, c))),
+      h("div.chips", classes.map((c) => h("button.chip" + (classFilter === c ? ".on" : ""), { onclick: () => { classFilter = c; render(); } }, c))),
       h("section.card", dataTable([
         { label: "Market", cell: (m) => h("div", h("a.sym", { href: "#/stock/" + encodeURIComponent(m.symbol) }, m.name), h("div.sym-name", m.symbol + " · " + m.class)) },
         { label: "Price", right: true, cell: (m) => (m.live.error ? "—" : fmt.num(m.live.price, m.live.price < 10 ? 3 : 2)) },
@@ -1287,9 +1346,13 @@ function marketsPage(root) {
             h("div", pill(m.tested.tone, m.tested.trend_wins + " of 4 trend rules beat holding")),
             h("div.muted", { style: "margin-top:3px" }, "Holding: " + fmt.pct(m.tested.hold.cagr_pct, 1) + "/yr, worst drop " + fmt.pct(m.tested.hold.max_drawdown_pct, 0) + " · " + m.tested.years + " yrs"))
             : h("span.muted.small", "Not tested")) },
+        { label: "Alerts", cell: (m) => alertButton(m.symbol) },
         { label: "", cell: (m) => (watched.has(m.symbol) ? h("span.tag", "Watching")
             : h("button.btn.small", { onclick: async (e) => { e.target.disabled = true; try { await api("/api/watchlist", { method: "POST", body: { symbol: m.symbol } }); await refreshOverview(); e.target.replaceWith(h("span.tag", "Watching")); } catch (err) { e.target.disabled = false; toast({ title: "Could not add " + m.symbol, body: err.message, tone: "warning" }); } } }, "Watch")) },
       ], rows, { onRow: (m) => { location.hash = "#/stock/" + encodeURIComponent(m.symbol); } })),
+      trend ? h("p.small.soft", "🔔 = you get an alert (in the app, and on your phone if push is set up) when that market's 10-month rule changes, on the first scan after a month's last close. " +
+        (trend.alerts.using_default ? "Turned on by default for the markets where most trend rules beat holding in testing." : ""),
+        trend.alerts.using_default ? null : h("button.btn.ghost.small", { onclick: () => setAlerts(null) }, "Reset to the tested trend-friendly markets")) : null,
       h("p.muted.small", "Trend (10-month rule): hold while the last month-end close is above its 10-month average, otherwise cash. “What testing found” counts how many of four trend rules (10-month average, 200-day average, 50/200 crossover, 55-day breakout) beat holding that market on a risk-adjusted basis over its whole history, with costs. With several rules per market some will win by luck, so agreement matters more than any single winner. Futures prices (=F) ignore the cost of rolling contracts."));
   }
 
@@ -1354,13 +1417,16 @@ function marketsPage(root) {
         "% of the second-most volatile fifth), but even there most stocks were better held. How smoothly a stock had trended before predicted nothing."));
   }
 
-  function render(data) {
+  function render() {
+    const data = markets;
     fill(body,
       data.tested_available ? h("div.note", "Testing found trend rules most useful in commodity funds (oil, natural gas, broad commodities, farm goods), where simply holding lost money over time, and in Ether. In gold, bonds, real estate and most stock markets, holding did as well or better.") : null,
-      marketTable(data), faberCard(data.faber), persistenceCard(data.persistence), data.tested_available ? detailTable(data) : null);
+      marketTable(data), trackerCard(), faberCard(data.faber), persistenceCard(data.persistence), data.tested_available ? detailTable(data) : null);
   }
 
-  api("/api/markets").then(render).catch((e) => fill(body, h("div.card", h("div.empty", e.message))));
+  Promise.all([api("/api/markets"), api("/api/trend").catch(() => null)])
+    .then(([m, t]) => { markets = m; trend = t; render(); })
+    .catch((e) => fill(body, h("div.card", h("div.empty", e.message))));
   return {};
 }
 

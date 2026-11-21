@@ -138,7 +138,25 @@ holding did as well or better in gold, bonds, real estate and most stock
 markets. A diversified 10-month trend portfolio (Faber 2007) had by far the
 smallest crashes but less return than a 60/40 mix. "Stocks we are best at"
 did not persist: the stocks where a rule did best in 2003–2014 did no better
-than the rest in 2015–2026. To rerun:
+than the rest in 2015–2026.
+
+**Trend alerts.** Each market has an alert switch (🔔). When a market's
+10-month rule changes at a month end, you get an alert in the app, and on your
+phone if push is set up. Alerts start out on for the markets where most trend
+rules beat holding in testing (oil, natural gas, broad commodities,
+agriculture, euro, Nasdaq, Ether). The first scan after a change only records
+the current state, so turning an alert on never fires an old signal.
+
+**Your trend portfolio.** The Markets page also tracks the 8-asset trend
+portfolio with your budget: what to hold now and how many dollars go in each
+(budget ÷ 8 per asset held, the rest in cash or T-bills), how far each asset
+is from its average, which ones would change if the month ended today, the
+next month-end check, and the last two years of changes. It sends one alert
+when the holdings change (switch it off on the card). Trend and market-risk
+alerts go to your phone with the default push setting, because they come only
+a few times a year.
+
+To rerun the market tests:
 
 ```bash
 python -m stockanalysis.validation.markets
@@ -204,6 +222,7 @@ stockanalysis/
   lab_runner.py             runs a tactic on one stock (Indicator Lab)
   tradingview.py            TradingView charts, Pine Script export, webhook alerts
   markets_view.py           live view of other markets for the Markets page
+  trend_watch.py            10-month-rule market alerts and the trend portfolio tracker
   validation/               historical test: replay, signal study, portfolio, walk-forward
   sec.py                    SEC EDGAR client and Form 4 parser
   insiders.py               live insider-trade watcher and alerts

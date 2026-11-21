@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import re
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -19,9 +18,9 @@ from .insiders import InsiderService, InsiderWatcher
 from .providers import CachedProvider, ProviderError, make_provider
 from .push import Pusher
 from .sec import SecClient
+from .symbols import SYMBOL_RE
 
 STATIC_DIR = Path(__file__).resolve().parent / "static"
-SYMBOL_RE = re.compile(r"^\^?[A-Z0-9][A-Z0-9.\-]{0,11}(=F|=X)?$")   # stocks, ETFs, GC=F, BTC-USD, ^GSPC
 
 
 class SymbolIn(BaseModel):
@@ -321,6 +320,10 @@ def create_app(db: Database | None = None, provider: CachedProvider | None = Non
             parsed = {}
         key = tactic if tactic in TACTICS else None
         return {"symbol": tv_symbol(_symbol(symbol)), "studies": studies(key, parsed if isinstance(parsed, dict) else {})}
+
+    @app.get("/api/trend")
+    def trend_overview():
+        return engine.trend.snapshot()
 
     @app.get("/api/markets")
     def markets_overview():
