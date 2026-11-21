@@ -10,6 +10,8 @@ import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import date, datetime, timedelta
 
+import pandas as pd
+
 from . import options as options_mod
 from . import sentiment as sentiment_mod
 from . import strategies
@@ -120,8 +122,13 @@ class Engine:
         positions = self.db.positions()
         position = next((p for p in positions if p["symbol"] == symbol), None)
         cash = available_cash(settings, positions)
+        peak_close = None
+        if position:
+            opened = pd.Timestamp(position["opened_at"], unit="s").normalize()
+            since = frame.loc[frame.index >= opened, "close"]
+            peak_close = float(max(since.max() if len(since) else price, float(position["entry_price"]), price))
         plan = plan_trade(price, float(last["atr14"]), decision["action"], settings, cash,
-                          position=position, chandelier=float(last["chandelier"]))
+                          position=position, peak_close=peak_close)
 
         market = self.market
         if market and decision["action"] in ("buy", "strong_buy") and not position:
@@ -133,11 +140,6 @@ class Engine:
                 plan["notes"].append(
                     f"The market is turbulent: the market risk indicator suggests keeping about "
                     f"{market['exposure_pct']}% of your budget in stocks, so consider a smaller position.")
-        if (decision["action"] in ("buy", "strong_buy") and not position
-                and not math.isnan(last["chandelier"]) and last["close"] < last["chandelier"]):
-            plan["notes"].append(
-                f"The price is under its trailing stop (${last['chandelier']:,.2f}). "
-                "Waiting for it to recover before buying avoids catching a dip that keeps going.")
 
         def build_options():
             return options_mod.recommend(
@@ -250,12 +252,19 @@ class Engine:
         # 2. Chart events on the latest bar.
         for event in cur["events"]:
             body = event["body"]
-            if event["kind"] in ("chandelier_exit", "trend_break") and cur.get("position"):
+            if event["kind"] == "trend_break" and cur.get("position"):
                 body += " You hold this stock: this is a sell signal for the position."
             push(event["kind"], event["direction"], event["title"], body, f"{event['kind']}:{event['date']}")
 
-        # 3. A held position closed below its stop.
+        # 3. A held position closed below its stop, or 20% below its best close since buying.
         position = cur.get("position")
+        trail = cur["plan"].get("trailing_stop")
+        if position and trail and cur["price"] <= trail:
+            push("trailing_stop_hit", "bearish", f"Trailing stop hit ({cur['plan']['trailing_stop_pct']:g}% below peak)",
+                 f"Price ${cur['price']:,.2f} is {cur['plan']['trailing_stop_pct']:g}% or more below its best close "
+                 f"since you bought (${cur['plan']['peak_close']:,.2f}). In the app's stop-loss test, a 20% trailing "
+                 "stop reduced the worst losses, but the stock was higher three months later about two times in "
+                 "three, so this is insurance, not a forecast.", f"trailing_stop_hit:{day}")
         if position and position.get("stop") and cur["price"] <= position["stop"]:
             push("stop_hit", "bearish", "Stop hit: sell",
                  f"Price ${cur['price']:,.2f} is at or below your stop of ${position['stop']:,.2f}. "

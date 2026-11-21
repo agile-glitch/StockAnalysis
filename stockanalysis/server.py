@@ -235,6 +235,17 @@ def create_app(db: Database | None = None, provider: CachedProvider | None = Non
             raise HTTPException(404, "No track record yet. Run: python -m stockanalysis.validation")
         return FileResponse(path, media_type="application/json", headers={"Cache-Control": "no-cache"})
 
+    @app.get("/api/validation/stops")
+    def validation_stops():
+        from .validation.run import REPORT_DIR
+        from .validation.stops import BUNDLED_STOPS
+        path = REPORT_DIR / "stops.json"
+        if not path.exists():
+            path = BUNDLED_STOPS
+        if not path.exists():
+            raise HTTPException(404, "No stop-loss test yet. Run: python -m stockanalysis.validation.stops")
+        return FileResponse(path, media_type="application/json", headers={"Cache-Control": "no-cache"})
+
     @app.get("/api/insiders/status")
     def insider_status():
         settings = db.get_settings()

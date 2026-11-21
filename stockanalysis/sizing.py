@@ -15,6 +15,12 @@ import math
 
 STOP_ATR_MULTIPLE = 2.5
 TARGET_R_MULTIPLE = 2.0
+# Trailing stop for positions you hold: 20% below the highest close since you
+# bought. In the app's 20-year stop-loss test (validation/stops.py) this was
+# the best balance: it cut the worst drawdown by about 13 points for about 2.6
+# points a year of return. Tight trailing stops (10%, or 3 ATR under the 22-day
+# high) were stopped out by ordinary noise and cost 7-9 points a year.
+TRAILING_STOP_PCT = 20.0
 
 
 def available_cash(settings: dict, positions: list[dict]) -> float:
@@ -23,7 +29,7 @@ def available_cash(settings: dict, positions: list[dict]) -> float:
 
 
 def plan_trade(price: float, atr: float | None, action: str, settings: dict, cash: float,
-               position: dict | None = None, chandelier: float | None = None) -> dict:
+               position: dict | None = None, peak_close: float | None = None) -> dict:
     budget = float(settings["budget"])
     risk_pct = float(settings["risk_per_trade_pct"])
     max_pos_pct = float(settings["max_position_pct"])
@@ -51,8 +57,10 @@ def plan_trade(price: float, atr: float | None, action: str, settings: dict, cas
         "target": round(price + TARGET_R_MULTIPLE * stop_distance, 2),
         "target_pct": round(TARGET_R_MULTIPLE * stop_distance / price * 100, 1),
     })
-    if chandelier and not math.isnan(chandelier):
-        plan["trailing_stop"] = round(chandelier, 2)
+    if position and peak_close and not math.isnan(peak_close):
+        plan["trailing_stop"] = round(peak_close * (1 - TRAILING_STOP_PCT / 100), 2)
+        plan["trailing_stop_pct"] = TRAILING_STOP_PCT
+        plan["peak_close"] = round(peak_close, 2)
 
     if position:
         shares = float(position["shares"])

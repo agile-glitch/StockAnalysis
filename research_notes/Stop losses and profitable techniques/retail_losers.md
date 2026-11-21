@@ -1,0 +1,165 @@
+# Trading Behaviors and Techniques That Reliably Lose Money for Retail Investors
+
+Research note scope: day trading, short-dated/OTM options, leverage, overtrading, attention/meme trading, crypto and leveraged ETFs, technical-analysis claims, retail flows/timing, finfluencers. Compiled 2026-11-21.
+
+Method caveat: this session could run web searches but could not fetch several primary hosts directly (faculty.haas.berkeley.edu, ideas.repec.org, econ.puc-rio.br failed DNS in the sandbox). Most figures below come from search-result excerpts of abstracts, journal listings, regulator pages, and press coverage quoting the papers. Figures I recall but could not confirm in this session are put in the Gaps sections, not the findings.
+
+## 1. Day trading
+
+### Takeaway
+The largest datasets (Taiwan's entire exchange, Brazil's entire futures market) show that the large majority of day traders lose money after costs, fewer than 1% earn predictable profits, and persistence does not lead to learning. US evidence is thinner and older, and the US $25,000 pattern-day-trader minimum was scrapped in 2026, which removes a barrier rather than reflecting any change in the evidence.
+
+### Cited Findings
+- Barber, Lee, Liu & Odean, "The Cross-Section of Speculator Skill: Evidence from Day Trading," Journal of Financial Markets 18 (2014), pp. 1-24, uses complete Taiwan Stock Exchange data 1992-2006: less than 1% of the day-trader population can predictably and reliably earn positive abnormal returns net of fees. — [eScholarship copy](https://www.escholarship.org/content/qt7k75v0qx/qt7k75v0qx.pdf?t=ohrd1z); [RePEc listing](https://econpapers.repec.org/RePEc:eee:finmar:v:18:y:2014:i:c:p:1-24)
+- In that study, only the ~4,000 most profitable day traders from the prior year (less than 1% of all day traders) go on to earn reliably positive returns; a working-paper version puts the number at about 1,000 per average year. The authors suggest the profitable minority may earn by supplying liquidity in an electronic limit-order market, while day traders overall place aggressive (immediacy-demanding) orders at a higher rate than other investors. — [eScholarship copy](https://www.escholarship.org/content/qt7k75v0qx/qt7k75v0qx.pdf?t=ohrd1z); [Berkeley working paper](https://faculty.haas.berkeley.edu/odean/papers/day%20traders/Day%20Trading%20Skill%20110523.pdf)
+- Companion paper "Do Day Traders Rationally Learn About Their Ability?" / "Learning, Fast or Slow" (Barber, Lee, Liu, Odean, Taiwan data): reports that about 97% of day traders lose money (search excerpt was truncated on the second statistic), and that experienced, consistently losing day traders keep trading at nearly the same rate as profitable ones, which is inconsistent with rational learning. — [Learning Fast or Slow (PUC-Rio seminar copy)](https://www.econ.puc-rio.br/uploads/adm/seminarios/Learning_fast_or_slow_180606.pdf); [Berkeley working paper](https://faculty.haas.berkeley.edu/odean/papers/day%20traders/day%20trading%20and%20learning%20110217.pdf)
+- Barber, Lee, Liu & Odean, "Just How Much Do Individual Investors Lose by Trading?" (Review of Financial Studies 2009, Taiwan 1995-1999): the aggregate portfolio of individual investors suffers an annual performance penalty of 3.8 percentage points; losses equal 2.2% of Taiwan's GDP or 2.8% of personal income (about US$32 billion over 1995-1999); institutions gained 1.5 points a year; transaction costs explain a bit under two-thirds of the losses; virtually all losses trace to aggressive (marketable) orders. — [RePEc](https://econpapers.repec.org/RePEc:oup:rfinst:v:22:y:2009:i:2:p:609-632); [UC Davis news](https://www.ucdavis.edu/news/individuals-lose-playing-market-institutions-win)
+- Chague, De-Losso & Giovannetti, "Day Trading for a Living?" (FGV / USP working paper 2019, Brazil): among individuals who began day trading Brazilian equity-index (mini-Ibovespa) futures in 2013-2015 and persisted at least 300 days, 97% lost money; only 0.4% earned more than a bank teller's starting salary (some summaries say ~1.1% earned more than the minimum wage); the top individual earned about US$310/day with high volatility; no evidence of learning. Data from Brazil's securities regulator (CVM); one summary cites 19,646 individuals in the full sample. — [SSRN 3423101](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3423101); [FGV repository](https://repositorio.fgv.br/items/e87d04fc-4b4c-4a56-ab5a-1c84c1afde1b); [Quantpedia summary](https://quantpedia.com/retail-day-trading-is-an-uphill-battle/); [Bloomberg coverage](https://www.bloombergquint.com/onweb/day-traders-in-brazil-study-would-ve-done-better-with-9-to-5-job)
+- Scope warning: the 97% applies to the persistent 300+ day subgroup, not every person who tried; several popular articles misstate this. — [SSRN 3423101](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3423101); [example of misstatement](https://freedomisntfree.co.uk/articles/why-97-percent-of-day-traders-lose-money-uk)
+- US rule change: the SEC approved FINRA's proposal (SR-FINRA-2025-017) in mid-April 2026 (FINRA lists April 14; a law-firm summary says April 15) replacing the pattern-day-trader framework with new intraday margin standards. The PDT designation, the 4-day-trades-in-5-days test, and the $25,000 minimum equity requirement are removed. FINRA gives an effective date of June 4, 2026; Schwab said it would stop counting day trades from June 8. — [FINRA Regulatory Notice 26-10](https://www.finra.org/rules-guidance/notices/26-10); [Federal Register notice](https://www.federalregister.gov/documents/2026/04/17/2026-07485/self-regulatory-organizations-financial-industry-regulatory-authority-inc-notice-of-filing-of); [Schwab](https://advisorservices.schwab.com/story/sec-approves-scrapping-25000-day-trader-minimum); [King & Spalding summary](https://www.kslaw.com/insights/articles/finra-adopts-sweeping-changes-to-margin-requirements-for-day-trading)
+- E*TRADE lists the post-change minimum as $2,000, the same as any margin account; I did not confirm this in FINRA's own text. — [E*TRADE day trading basics](https://us.etrade.com/knowledge/library/stocks/day-trading-basics)
+
+### Inferences
+- Across two very different markets (Taiwan cash equities, Brazil index futures) the result is the same: losses are the norm, profitable traders are a tiny persistent minority, and losers do not quit fast enough. This makes "most day traders lose" one of the best-supported claims in household finance.
+- With the US $25k PDT barrier gone from mid-2026, small-account US retail traders can day trade freely on margin. The Taiwan/Brazil evidence suggests this will widen participation in an activity with very poor expected outcomes; there is no post-change US outcome data yet.
+- Costs (spreads, commissions/taxes, aggressive orders) explain much of the loss, so "zero-commission" brokers reduce but do not remove the drag (spread and adverse selection remain).
+
+### Gaps
+- Jordan & Diltz (2003, Financial Services Review) US day-trader study: commonly cited as finding only about 36% of day traders profitable in their sample and a small fraction strongly profitable; I could not verify the numbers in this session.
+- No large, recent (2020s) US administrative-data study of day-trader profitability was found; US evidence relies on older small broker samples.
+- Exact "Learning, Fast or Slow" statistics (the 97% figure and the companion percentage) could not be fully read because the PDF host was blocked.
+- No post-June-2026 evidence yet on behavior after PDT removal.
+
+## 2. Options: short-dated, OTM, earnings plays, 0DTE
+
+### Takeaway
+Peer-reviewed work finds US retail options traders lose in aggregate: about $1.1 billion in trading losses plus about $4.1 billion in transaction costs (Nov 2019-Jun 2021), 5-14% losses around earnings announcements, and losses in 0DTE SPX options driven mostly by costs. The common mechanism is buying expensive, cheap-looking, short-dated contracts with wide bid-ask spreads.
+
+### Cited Findings
+- Bryzgalova, Pavlova & Sikorskaya, "Retail Trading in Options and the Rise of the Big Three Wholesalers," Journal of Finance (2023): retail investors lost about $1.14 billion trading options from November 2019 to June 2021 (assuming a 10-day holding period), plus about $4.13 billion in trading costs; press coverage rounds the total including costs to ~$5 billion. — [Journal of Finance PDF (LBS repository)](https://lbsresearch.london.edu/id/eprint/2827/1/The%20Journal%20of%20Finance%20-%202023%20-%20BRYZGALOVA%20-%20Retail%20Trading%20in%20Options%20and%20the%20Rise%20of%20the%20Big%20Three%20Wholesalers.pdf); [LBS news](https://london.edu/news/amateur-investors-lost-big-during-pandemic-2034); [FA Magazine](https://www.fa-mag.com/news/mom-and-pop-investors-took-a-billion-dollar-bath-trading-options-during-the-pandemic-67571.html?section=43)
+- Same paper: retail investors favor cheap, short-dated (weekly) options with average bid-ask spreads of about 12.6% (12.3% in an earlier draft). In 2021 US brokers received $2.4 billion in payment for order flow on options versus $1.3 billion on equities, mostly from Citadel, Susquehanna and Wolverine. — [Journal of Finance PDF](https://lbsresearch.london.edu/id/eprint/2827/1/The%20Journal%20of%20Finance%20-%202023%20-%20BRYZGALOVA%20-%20Retail%20Trading%20in%20Options%20and%20the%20Rise%20of%20the%20Big%20Three%20Wholesalers.pdf); [WealthManagement.com](https://www.wealthmanagement.com/alternative-investments/options-trading-rigged-against-average-investors)
+- de Silva, Smith & So, "Losing is Optional: Retail Option Trading and Earnings Announcement Volatility" (Review of Finance, 2025): retail investors concentrate option purchases before earnings announcements, especially high expected-volatility ones; estimated average retail losses of 5-9% around earnings announcements and 10-14% for high-expected-volatility announcements. Losses come mainly from overpaying (bidding up implied volatility) and very wide bid-ask spreads; retail traders are also slow to close positions after the announcement; market makers take the other side. — [Stanford GSB](https://www.gsb.stanford.edu/faculty-research/publications/losing-optional-retail-option-trading-expected-announcement); [MIT Sloan](https://mitsloan.mit.edu/ideas-made-to-matter/retail-investors-lose-big-options-markets-research-shows); [Advisor Perspectives](https://www.advisorperspectives.com/articles/2023/02/19/the-wealth-destroying-behavior-of-retail-option-trading)
+- Beckmeyer, Branger & Gayda, "Retail Traders Love 0DTE Options... But Should They?" (SSRN 4404704, 2023 working paper; S&P 500 options): retail investors lost more than $70 million over roughly two years, of which more than $50 million was transaction costs; average daily retail losses were $184,000 over the full sample and rose to $358,000/day after daily SPX expirations started (May 16, 2022); about 75% of retail trades in S&P 500 options were in 0DTE contracts. The authors attribute losses to retail neglect of how expensive the options are and call the paper a cautionary tale about unrestricted retail access. — [Bloomberg (via BNN)](https://www.bnnbloomberg.ca/day-traders-lose-358-000-per-day-gambling-on-zero-day-options-1.1910634); [WealthManagement.com](https://www.wealthmanagement.com/equities/retail-investors-are-in-love-with-same-day-options); [Paper summary](https://medium.com/@y125789/retail-traders-love-0dte-options-paper-summary-6da4a7ff7d72)
+
+### Inferences
+- The dollar totals in the 0DTE study are small relative to market size (that paper's sample covers retail flow in SPX options only), so its message is about the rate of loss and the cost share, not total wealth destroyed. The Bryzgalova et al. figure is the better "total US retail options loss" anchor for 2019-2021.
+- Recurring pattern: retail buys lottery-like payoffs (cheap OTM/weekly/0DTE, pre-earnings) where implied volatility and spreads are highest; the "cheapness" per contract hides a high percentage cost.
+- Short-dated options magnify the cost problem: the spread is paid on every round trip, and shorter holding periods mean more round trips per dollar of exposure.
+
+### Gaps
+- No verified CBOE/OCC figure in this session for the current (2025-2026) 0DTE share of SPX volume or retail share of 0DTE; commonly quoted figures (~50-60% of SPX volume in 0DTE) are unverified here.
+- Later 0DTE studies with contrary findings (some argue retail 0DTE losses are smaller or that retail sells as well as buys) were not reviewed.
+- No US evidence found on the share of individual options accounts that are profitable (as opposed to aggregate losses). An AEA 2026 paper on India's options market exists (SEBI has reported large majorities of individual F&O traders losing) but was not reviewed in detail. — [AEA 2026 program](https://www.aeaweb.org/conference/2026/program/paper/StD8aadb)
+
+## 3. Attention-driven trading, Robinhood, meme stocks
+
+### Takeaway
+Attention-driven herding into the day's top movers is followed by negative abnormal returns (about -4.7% over 20 days for the most-bought stocks). For balance, Welch found the aggregate Robinhood crowd portfolio did not underperform standard benchmarks in 2018-2020, so the losses concentrate in attention spikes and herding episodes, not in retail holdings as a whole.
+
+### Cited Findings
+- Barber, Huang, Odean & Schwarz, "Attention-Induced Trading and Returns: Evidence from Robinhood Users," Journal of Finance 77(6), Dec 2022, pp. 3141-3190: Robinhood users engage in more attention-induced trading than other retail investors (Robinhood outages disproportionately reduce trading in high-attention stocks); herding is influenced by information prominently displayed in the app (e.g., "Top Movers"); average 20-day abnormal returns are -4.7% for the top stocks purchased each day; herding episodes can be predicted from lagged absolute returns and abnormal volume. — [WUSTL profile](https://profiles.wustl.edu/en/publications/attention-induced-trading-and-returns-evidence-from-robinhood-use/); [IIMB copy of paper](https://iimb.ac.in/sites/default/files/inline-files/attention-induced-trading.pdf)
+- UC Davis coverage of the same work: data May 2018-August 2020; the Robinhood crowd loses roughly 5% relative to the market in each herding episode, and the negative return was roughly twice as large in the pandemic period (secondary summary; the paper's -4.7% is authoritative). — [UC Davis](https://www.ucdavis.edu/curiosity/blog/what-effect-brokerage-robinhood-having-stock-market)
+- Welch, "The Wisdom of the Robinhood Crowd," Journal of Finance 77(3), 2022, pp. 1489-1527: Robinhood investors added to holdings during the March 2020 crash (no panic selling) and were rewarded in the rebound; the aggregate crowd portfolio (mid-2018 to mid-2020) showed good timing and alpha and did not underperform standard academic benchmark models; it was tilted toward high-volume, mostly large stocks (volume explains ~50-60% of weights). — [NBER w27866](https://www.nber.org/papers/w27866); [RePEc](https://econpapers.repec.org/RePEc:bla:jfinan:v:77:y:2022:i:3:p:1489-1527); [UCLA Anderson Review](https://anderson-review.ucla.edu/robinhood)
+
+### Inferences
+- The two Robinhood papers are compatible: the aggregate portfolio (dominated by large, high-volume names held over time) did fine in a strong bull period, while the marginal attention-driven purchases (top-mover chasing) lost money. The losing behavior is chasing salient movers, not owning stocks.
+- Welch's sample period (2018-2020) ended in a sharp rally; one cannot extrapolate crowd outperformance.
+
+### Gaps
+- I did not retrieve verified data on 2021 meme-stock outcomes (e.g., GameStop/AMC buyer returns by entry date, or the SEC's October 2021 GameStop staff report). Widely known: buyers near the late-January 2021 peaks suffered large losses, but specific sourced numbers were not gathered in this session.
+- No verified study on 2024-2026 meme-stock episodes.
+
+## 4. Overtrading, overconfidence, and the disposition effect
+
+### Takeaway
+Classic US broker data (1990s) show that the most active traders earn the lowest net returns and that men, who trade more, lose more to trading than women; investors sell winners that keep outperforming and hold losers. The overtrading result has a published rational-model challenge, but the direction of the evidence is consistent across countries.
+
+### Cited Findings
+- Barber & Odean, "Trading Is Hazardous to Your Wealth" (Journal of Finance 2000), US discount-broker households: the 20% of households that trade most (average monthly turnover of at least 9.6%) earned an annualized geometric mean net return of 10.0%, below the market and below less active households; the authors attribute this to overconfidence. — [NBER copy via search](https://www.nber.org/papers/w16022.pdf); [Berkeley returns page](https://faculty.haas.berkeley.edu/odean/papers/returns/returns.html)
+- Barber & Odean, "Boys Will Be Boys" (Quarterly Journal of Economics 2001): men and women both reduce net returns through trading, but men do so by 0.94 percentage points a year more than women, consistent with overconfidence. — [Berkeley PDF](https://faculty.haas.berkeley.edu/odean/papers/gender/BoysWillBeBoys.pdf)
+- Counterpoint: Bonaparte & Cooper (NBER 2010) argue a rational model with adjustment costs can reproduce the turnover/return pattern, concluding the "hazard" of trading is an open issue. — [NBER w16022](https://www.nber.org/papers/w16022.pdf)
+- Odean, "Are Investors Reluctant to Realize Their Losses?" (Journal of Finance 1998; 10,000 discount-broker accounts, 1987-1993): investors strongly prefer realizing winners over losers, and the winners they sell continue to outperform the losers they keep; tax, rebalancing and transaction-cost explanations fail to explain this. — [Berkeley page](https://faculty.haas.berkeley.edu/odean/papers/disposition/disposition.html); [CFA Digest summary](https://rpc.cfainstitute.org/-/media/documents/article/cfa-digest/1999/dig-v29-n2-469-pdf.pdf)
+- Taiwan evidence (above, section 1): individuals' aggregate penalty of 3.8 points a year, mostly from costs and aggressive orders. — [RePEc](https://econpapers.repec.org/RePEc:oup:rfinst:v:22:y:2009:i:2:p:609-632)
+
+### Inferences
+- For a reader's practical purposes: higher turnover predicts lower net returns; holding losers while selling winners is a measurable cost and the reverse of a stop-loss discipline.
+
+### Gaps
+- Commonly cited specific numbers I could not verify in this session (host blocked): Barber & Odean (2000) sample of ~66,465 households 1991-1996, most active quintile 11.4% net vs. 17.9% market and 16.4% average household; "men trade 45% more than women"; Odean (1998) winners sold outperformed losers held by ~3.4 percentage points over the following year. These are widely quoted and likely correct but should be checked against the papers before publication.
+
+## 5. Leverage: leveraged/inverse ETFs, margin, crypto perpetuals
+
+### Takeaway
+Daily-reset leveraged and inverse ETFs lose value in volatile, sideways markets over multi-day holds (regulators' own examples show losses even when the index ends flat, and a 3x inverse fund falling ~90%). Leverage in crypto produced the largest liquidation event on record in October 2025 (~$19 billion, ~1.6 million traders), though liquidated notional is not the same as realized loss.
+
+### Cited Findings
+- SEC/FINRA joint Investor Alert (August 2009): leveraged and inverse ETFs reset daily, so returns over longer periods can differ sharply from the stated multiple of the index; one example: a 3x inverse fund on the Russell 1000 Financial Services Index declined about 90% over a period in which the simple expectation would have been different (the alert's full example terms were not visible in the snippet). — [Investor.gov alert](https://www.investor.gov/introduction-investing/general-resources/news-alerts/alerts-bulletins/investor-alerts/sec-finra); [FINRA news release](https://finra.org/media-center/news-releases/2009/finra-sec-warn-retail-investors-about-investing-leveraged-or-inverse); [Investor.gov info sheet](https://www.investor.gov/publications-research-studies/info-sheets/Leveraged-Inverse-ETFs)
+- FINRA Regulatory Notice 09-31: illustrative example where an index ends where it started; the inverse ETF loses 0.02% in a low-volatility path but 1.82% in a higher-volatility path, showing volatility decay alone; FINRA said these products are typically unsuitable for retail investors who plan to hold them for more than one trading session. — [FINRA RN 09-31](https://www.finra.org/rules-guidance/notices/09-31); [Colorado Division of Securities alert](https://securities.colorado.gov/press-release/adviser-alert-inverse-and-leveraged-etfs)
+- FINRA FAQ: not FINRA's position that all leveraged/inverse ETFs are unsuitable for all retail customers, but recommendations must address suitability. — [FINRA non-traditional ETF FAQ](https://www.finra.org/rules-guidance/key-topics/etf/non-traditional-etf-faq)
+- SEC statements: in spring 2020 several 3x leveraged/inverse funds cut their multiples to 2x because of volatility; SEC commissioner statement (July 2022) warning about single-stock levered/inverse ETFs. — [SEC joint statement on complex products (2020)](https://SEC.gov/news/public-statement/clayton-blass-hinman-redfearn-complex-financial-products-2020-10-28); [SEC statement on single-stock ETFs (2022)](https://www.sec.gov/newsroom/speeches-statements/schock-statement-single-stock-levered-or-inverse-etfs-071122)
+- Crypto leverage, October 10-11, 2025: Coinglass reported more than $19 billion of liquidations in 24 hours across about 1.6 million traders (it called this conservative); one tally split it as ~$16.7 billion longs and ~$2.5 billion shorts, with over 90% of liquidations hitting longs on most exchanges and ~$10.3 billion on Hyperliquid alone; triggered by a 100% China tariff threat, thin weekend liquidity, and exchange interface outages. — [Yahoo Finance / Bloomberg](https://finance.yahoo.com/news/record-19bn-crypto-crash-exposes-194741410.html); [FTI Consulting](https://www.fticonsulting.com/en/germany/insights/articles/crypto-crash-october-2025-leverage-met-liquidity); [CoinGecko explainer](https://www.coingecko.com/learn/october-10-crypto-crash-explained); [KuCoin flash](https://www.kucoin.com/news/flash/crypto-market-sees-19-15b-liquidation-event-on-october-10-2025)
+- Caveat: Cointelegraph notes the $19 billion is forcibly closed position value, not dollars lost by investors. — [Cointelegraph](https://cointelegraph.com/news/19b-crypto-market-crash-leverage-china-tariffs?rand=50490)
+
+### Inferences
+- Leverage turns normal volatility into forced exits: a leveraged trader can be right on direction over a week and still be liquidated or decayed out on the path. This links directly to stop-loss design: with leverage, the effective stop is set by the margin/liquidation level, not the trader.
+- Daily-reset products are tools for intraday or very short holding periods; buy-and-hold use in volatile markets has a structural drag regulators have documented since 2009.
+
+### Gaps
+- No academic estimate of aggregate retail losses in US leveraged/inverse ETFs was retrieved.
+- No verified data on US retail margin-account outcomes (e.g., FINRA margin debt vs. retail returns).
+- No verified CFD loss disclosures (EU/UK brokers must disclose the share of retail CFD accounts that lose money, typically quoted as 70-80%+); not checked in this session.
+
+## 6. Technical analysis claims under testing
+
+### Takeaway
+Many studies report profitable technical rules, but once data snooping and transaction costs are handled properly, publicly known rules on US stock indices show no reliable edge after the 1980s; earlier apparent profits faded. Positive results are more common in older FX and futures samples.
+
+### Cited Findings
+- Park & Irwin, "What Do We Know About the Profitability of Technical Analysis?" (Journal of Economic Surveys 21(4), 2007): of 95 modern studies, 56 found positive results, 20 negative, 19 mixed; early studies found profitability in FX and futures but not stocks; most studies suffer from data snooping, ex post rule selection, and problems estimating risk and transaction costs. — [RePEc](https://econpapers.repec.org/RePEc:bla:jecsur:v:21:y:2007:i:4:p:786-826); [farmdoc review](https://farmdoc.illinois.edu/publications/the-profitability-of-technical-analysis-a-review)
+- Sullivan, Timmermann & White, "Data-Snooping, Technical Trading Rule Performance, and the Bootstrap" (Journal of Finance 1999): applies White's Reality Check to a large universe of rules on ~100 years of DJIA data, extending Brock-Lakonishok-LeBaron; tests BLL rules on the following 10 years (1987-1996) out of sample; summaries report the rules lose predictive power for major US indices after the mid-1980s. — [RePEc](https://econpapers.repec.org/RePEc:bla:jfinan:v:54:y:1999:i:5:p:1647-1691); [Paper PDF](https://bashtage.github.io/kevinsheppard.com/files/teaching/mfe/advanced-econometrics/Sullivan_Timmermann_White.pdf)
+- Bajgrowicz & Scaillet, "Technical Trading Revisited: False Discoveries, Persistence Tests, and Transaction Costs" (Journal of Financial Economics 106, 2012, pp. 473-491; DJIA 1897-2011): using a false-discovery-rate approach, even in-sample performance is completely offset by low transaction costs; persistence tests show an investor could never have selected the future best rules ex ante; summaries report that since about 1962 most strategies were unprofitable even at zero transaction cost; they conclude publicly available technical indicators do not have predictive power exceeding their costs (while conceding non-public indicators might). — [RePEc](https://econpapers.repec.org/RePEc:eee:jfinec:v:106:y:2012:i:3:p:473-491); [CFA Digest summary](https://rpc.cfainstitute.org/research/cfa-digest/2013/02/technical-trading-revisited-false-discoveries-persistence-tests-and-transaction-costs-digest); [Paper PDF](https://bashtage.github.io/kevinsheppard.com/files/teaching/mfe/advanced-econometrics/Bajgrowicz_Scaillet.pdf)
+- FX follow-up (Zarrabi, Snaith & Coakley) finds no evidence of technical-rule profitability after transaction costs and data snooping. — [Essex repository](https://repository.essex.ac.uk/18805/1/1-s2.0-S1057521916301958-main.pdf)
+
+### Inferences
+- The "56 of 95 positive" headline is not evidence that technical analysis works: it is the expected outcome of many researchers testing many rules without proper multiple-testing correction. The more rigorous studies (SWT 1999, B&S 2012) are the ones a retail trader should weigh.
+- Simple rules (moving-average crossovers, trading-range breaks) that looked profitable in early-20th-century data faded as markets became more efficient and costs were properly charged.
+- Chart-pattern courses and indicator "systems" sold to retail rarely disclose out-of-sample, after-cost, multiple-testing-adjusted performance.
+
+### Gaps
+- Exact B&S pre-1962 break-even cost range (one summary says 16-70 bps) was not verified against the paper.
+- Time-series momentum / trend following in diversified futures (a distinct, institution-run strategy with positive long-run evidence) was not covered here and should not be confused with retail chart reading.
+- No retail-specific study on chart-pattern trading outcomes was found.
+
+## 7. Retail flows and market timing (fund investors)
+
+### Takeaway
+Fund investors' buy/sell timing costs them roughly 1.2-1.6 percentage points a year versus the funds they own, with larger gaps in volatile funds. Dalbar's much larger QAIB gaps are disputed on methodological grounds and should be cited with caution or not at all.
+
+### Cited Findings
+- Morningstar "Mind the Gap" (10 years to Dec 31, 2025; 2026 edition): average dollar in US mutual funds and ETFs earned about 8.7%/yr vs. 9.9% aggregate fund total return, a gap of ~1.2 points/yr (~12% of total return); least-volatile funds gap -0.4%/yr vs. -2.1%/yr for most volatile; ETFs show a wider gap than open-end funds; the 1.2-point gap is in line with 10-year periods ending 2021-2024. — [Morningstar US Mind the Gap 2026 PDF](https://www.morningstar.com/content/cs-assets/v3/assets/blt9415ea4cc4157833/blt852a4301adc2f5db/6a7373d51f7b5ae2da78e1e8/US_Mind_the_Gap_2026.pdf); [Morningstar Mind the Gap 2025 page](https://www.morningstar.com/business/insights/research/mind-the-gap-2025); [Advisor Perspectives](https://www.advisorperspectives.com/commentaries/2026/08/21/what-advisors-can-learn-from-the-investor-return-gap?firm=vettafi)
+- Friesen & Sapp, "Mutual Fund Flows and Investor Returns" (Journal of Banking & Finance 31(9), 2007): over 1991-2004, timing decisions of equity fund investors reduced average returns by about 1.56% per year (7,125 funds, monthly data); underperformance larger in load funds and in high-alpha funds, largely offsetting their alpha; investors chase past returns. — [RePEc](https://econpapers.repec.org/RePEc:eee:jbfina:v:31:y:2007:i:9:p:2796-2816); [UNL repository](https://digitalcommons.unl.edu/cbafacpub/48); [CXO Advisory](https://cxoadvisory.com/individual-investing/the-timing-inability-of-mutual-fund-investors); [DOL review](https://www.dol.gov/sites/dolgov/files/EBSA/researchers/analysis/retirement/the-ability-of-investors-to-time-purchases-and-sales-of-mutual-funds.pdf)
+- Dalbar QAIB critique: Wade Pfau (and Harry Sit, via Kitces' blog) argued Dalbar's method treats systematic contributions as if invested at the start and mixes time-weighted and money-weighted returns, understating investor returns; Dalbar's Lou Harvey responded that QAIB measures the investor's dollar experience, not a time-weighted return. — [Advisor Perspectives (Pfau)](https://www.advisorperspectives.com/articles/2017/03/06/a-warning-to-the-advisory-profession-dalbar-s-math-is-wrong); [Dalbar response](https://www.advisorperspectives.com/articles/2017/05/08/timing-intelligence-a-response-from-dalbar); [ThinkAdvisor](https://www.thinkadvisor.com/2017/04/20/lou-harvey-hits-pfau-back-over-criticism-of-dalbar/); [Advisor Perspectives: "Investors Do Not Underperform"](https://www.advisorperspectives.com/articles/2017/10/09/investors-do-not-underperform-their-investments)
+
+### Inferences
+- The best-supported magnitude for the "behavior gap" is ~1-1.5 points/yr (Morningstar, Friesen & Sapp), much smaller than the multi-point gaps often quoted from Dalbar.
+- The gap is larger in volatile products, consistent with the other sections: volatility plus discretion produces worse timing.
+
+### Gaps
+- Current Dalbar QAIB headline figures were not retrieved; post-2017 methodology debate not reviewed.
+
+## 8. Finfluencers, signal services, and courses
+
+### Takeaway
+The main academic study of finfluencers finds most are antiskilled (following them loses ~2.3% a month abnormal), and the less skilled ones attract more followers; a contrarian strategy against them earned ~1.2% a month. Brazil's day-trading study was written partly to rebut course providers' claims that day trading for a living is possible.
+
+### Cited Findings
+- Kakhbod, Kazempour, Livdan & Schürhoff, "Finfluencers" (SFI Research Paper 23-30; CEPR DP 20204, 2025): average finfluencer skill is near zero; 28% are skilled (advice yields +2.6%/month abnormal returns), 16% unskilled, 56% antiskilled (following yields -2.3%/month); a 2025 AEA version gives 28/17/55%. Unskilled and antiskilled finfluencers have more followers, post excessively optimistic tweets that precede price reversals, and are more engaging; finfluencers induce excessive trading and a contrarian strategy earns 1.2%/month out of sample. Data: tweet-level records from a stock-picking (StockTwits-type) platform. — [SFI publication](https://www.sfi.ch/en/publications/n-23-30-finfluencers); [SFI news](https://www.sfi.ch/en/about-us/news/finfluencers-under-the-microscope-advice-vs.-entertainment); [AEA 2025 program](https://www.aeaweb.org/conference/2025/program/paper/i3ry3n4t); [CEPR via EconPapers](https://econpapers.repec.org/RePEc:cpr:ceprdp:20204)
+- Chague et al. explicitly frame their Brazil findings against course providers who claim it is possible to day trade for a living. — [SSRN 3423101](https://papers.ssrn.com/sol3/papers.cfm?abstract_id=3423101)
+
+### Inferences
+- Popularity is negatively or not related to skill for finfluencers, so follower count and engagement are red flags rather than credentials. Combined with survivorship (losing gurus stop posting), visible track records are biased upward.
+- Red flags supported by the evidence above: promises of day trading income, short-dated options "lottery" strategies, chart-pattern systems without out-of-sample after-cost tests, and leveraged products sold as buy-and-hold.
+
+### Gaps
+- No verified study on paid signal-service or trading-course outcomes (e.g., audited subscriber returns) was found.
+- SEC/FINRA/CFTC enforcement statistics on finfluencer or course fraud were not gathered.

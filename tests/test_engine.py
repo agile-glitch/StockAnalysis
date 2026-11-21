@@ -116,3 +116,27 @@ def test_feeds(engine):
     dates = [r["next_date"] for r in calendar if r["next_date"]]
     assert dates == sorted(dates)
     assert all(t["kind"] in ("buy", "sell", "other") for t in engine.insider_feed())
+
+
+def test_trailing_stop_tracks_best_close_since_buying_and_alerts(engine, db):
+    import time as _time
+    engine.scan()
+    a = engine.analyses["TSLA"]                      # a falling stock in the demo data
+    closes = a["chart"]["close"]
+    # Bought a year ago at the price back then.
+    db.set_position("TSLA", 10, closes[0], stop=None)
+    with db._lock:
+        db._conn.execute("UPDATE positions SET opened_at = ? WHERE symbol = 'TSLA'", (_time.time() - 365 * 86400,))
+        db._conn.commit()
+    db.clear_notifications()
+    cur = engine.refresh_symbol("TSLA")
+    plan = cur["plan"]
+    peak = max(c for c in closes if c is not None)
+    assert plan["trailing_stop_pct"] == 20.0
+    assert abs(plan["peak_close"] - peak) / peak < 0.02
+    assert abs(plan["trailing_stop"] - peak * 0.8) < 0.05 * peak
+    hits = [n for n in db.notifications() if n["kind"] == "trailing_stop_hit"]
+    assert (cur["price"] <= plan["trailing_stop"]) == bool(hits)
+    assert not [n for n in db.notifications() if n["kind"] == "chandelier_exit"]
+    # Stocks you don't own get no trailing stop.
+    assert "trailing_stop" not in engine.analyses["AAPL"]["plan"]

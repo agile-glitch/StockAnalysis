@@ -687,7 +687,7 @@ function stockPage(root, symbol) {
     if (p.stop !== undefined) {
       add("Stop loss", fmt.money(p.stop) + " (−" + p.stop_pct + "%)");
       if (a.direction === "bullish" && !a.position) add("First target", fmt.money(p.target) + " (+" + p.target_pct + "%)");
-      if (p.trailing_stop) add("Trailing stop", fmt.money(p.trailing_stop));
+      if (p.trailing_stop) add("Trailing stop (" + p.trailing_stop_pct + "% below best close)", fmt.money(p.trailing_stop));
       if (a.direction === "bullish" && p.shares) add("Loss if stopped", fmt.money(p.risk_amount));
     }
     if (p.holding) {
@@ -1147,6 +1147,7 @@ function trackRecordPage(root) {
   let cell = "train_2015_now";
   let which = "chosen";
   let report = null;
+  let stops = null;
   const body = h("div.stack");
   fill(root, pageHead("Track record", "The rules replayed day by day on 20+ years of past prices, then checked against what happened next, on stocks and years they were not tuned on."), body);
 
@@ -1265,7 +1266,7 @@ function trackRecordPage(root) {
         h("li", "Past results do not guarantee future ones, and markets change once rules become popular.")),
       h("p.muted.small", { style: "margin-top:8px" }, "Run on " + new Date(r.generated).toLocaleString() + ". Rerun with: python -m stockanalysis.validation"));
 
-    fill(body, ...storyCards(r), h("h2", { style: "margin-top:12px;font-size:18px" }, "Round 1 in detail: the app's own Buy and Sell rules"),
+    fill(body, ...storyCards(r), stops ? stopsCard(stops) : null, h("h2", { style: "margin-top:12px;font-size:18px" }, "Round 1 in detail: the app's own Buy and Sell rules"),
       h("div.row", rulesChips), summary, h("div.row", cellChips), portfolioCard, signalCard, yearCard, searchCard, caveats);
   }
 
@@ -1351,7 +1352,35 @@ function trackRecordPage(root) {
     return cards;
   }
 
-  api("/api/validation").then((r) => { report = r; render(); })
+  function stopsCard(st) {
+    const base = st.results[0];
+    const rows = st.results.slice(1).sort((a, b) => b.avg_sharpe_vs_hold - a.avg_sharpe_vs_hold);
+    const avg = (x, key) => {
+      const vals = Object.values(x.cells).map((c) => c[key]).filter((v) => v !== null && v !== undefined);
+      return vals.length ? vals.reduce((a, b) => a + b, 0) / vals.length : null;
+    };
+    const signed = (x, d = 1) => {
+      if (x === null) return "—";
+      const r = Number(x.toFixed(d));
+      return (r > 0 ? "+" : r < 0 ? "−" : "") + Math.abs(r).toFixed(d);
+    };
+    return h("section.card",
+      h("div.card-head", h("h2", "Stop-loss test: does a stop under each stock help?"),
+        h("p", "Every stock held with one exit rule, " + Object.keys(base.cells).length + " stock-and-period sets, 2003–2026")),
+      h("p.soft", "Every stop lowered the average yearly return. Wide trailing stops cut the worst drawdowns for a modest cost; tight stops were hit by ordinary noise and cost 7–9 points a year. After a stop-out, the stock was usually higher three months later."),
+      dataTable([
+        { label: "Exit rule", cell: (x) => h("div", h("div", x.name), h("div.small.muted", x.family)) },
+        { label: "Return vs holding", right: true, cell: (x) => h("span." + signClass(x.avg_cagr_vs_hold), signed(x.avg_cagr_vs_hold, 2) + " pts/yr") },
+        { label: "Worst drop vs holding", right: true, cell: (x) => h("span." + signClass(x.avg_drawdown_vs_hold), signed(x.avg_drawdown_vs_hold) + " pts") },
+        { label: "Sharpe vs holding", right: true, hideSmall: true, cell: (x) => h("span." + signClass(x.avg_sharpe_vs_hold), signed(x.avg_sharpe_vs_hold, 2)) },
+        { label: "Stop-outs / stock / yr", right: true, hideSmall: true, cell: (x) => (avg(x, "stop_outs_per_stock_year") ?? 0).toFixed(2) },
+        { label: "Higher 3 months after stop-out", right: true, hideSmall: true, cell: (x) => { const v = avg(x, "rose_after_stop_pct"); return v === null ? "—" : Math.round(v) + "%"; } },
+      ], rows),
+      h("p.muted.small", { style: "margin-top:8px" }, "Stops fill at the stop price, or at the open when a stock gaps below it. 10 basis points per trade; cash earns T-bill interest while stopped out. A positive drawdown difference means a shallower worst loss. Rerun with: python -m stockanalysis.validation.stops"));
+  }
+
+  Promise.all([api("/api/validation"), api("/api/validation/stops").catch(() => null)])
+    .then(([r, st]) => { report = r; stops = st; render(); })
     .catch((e) => fill(body, h("section.card", h("div.empty", e.message))));
   return {};
 }
@@ -1377,7 +1406,7 @@ const GUIDE = [
     text: "Negative wording in financial news predicts lower prices, but for a day or two, after which prices revert (Tetlock). The app reads headline tone with a finance-specific word list and gives it a small weight. Use the News page to read the stories, not just the score.",
     sources: [["Tetlock, Giving Content to Investor Sentiment", "https://www.columbia.edu/~pt2238/papers/Tetlock_Media_Sentiment_JF.pdf"]] },
   { title: "7. Size by risk, and always have an exit", weight: "Sizing rule",
-    text: "Position size comes from the stop, not from conviction: shares = (budget × risk per trade) ÷ (entry − stop). The stop sits 2.5 ATRs below the entry (ATR is the stock's average daily range), so a volatile stock gets a wider stop and fewer shares. A trailing stop 3 ATRs under the 22-day high locks in gains. This does not raise returns by itself; it makes sure no single trade can do serious damage.",
+    text: "Position size comes from the stop, not from conviction: shares = (budget × risk per trade) ÷ (entry − stop). The stop sits 2.5 ATRs below the entry (ATR is the stock's average daily range), so a volatile stock gets a wider stop and fewer shares. Once you hold a stock, the app tracks a trailing stop 20% below its best close since you bought. In the app's own 20-year test, every stop lowered average return; a 20% trailing stop was the best trade-off, cutting the worst drawdown by about 13 points for about 2.6 points a year, while tight trailing stops (10%, or 3 ATRs under the 22-day high) cost 7–9 points a year in whipsaws. Stops are insurance against big losses, not a way to make more money.",
     sources: [] },
   { title: "8. Options: where retail traders actually lose", weight: "Options rules",
     text: "Studies of retail option trading find the losses concentrate in three habits: cheap far out-of-the-money contracts, expiries a few days away with wide bid/ask spreads, and buying just before earnings, when prices are inflated and collapse after the report (losses of 5 to 14% on average around announcements). The app does the opposite: about 45 days to expiry, delta near 0.60, spreads instead of outright buys near earnings or when options are expensive, and selling cash-secured puts when implied volatility is rich. Every idea is capped by your options risk setting.",

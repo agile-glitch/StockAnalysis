@@ -250,10 +250,6 @@ def technical_events(frame) -> list[dict]:
             and r["volume"] >= 1.5 * r["vol_avg50"]):
         add("breakout", "bullish", "Breakout to a 52-week high",
             f"New 52-week closing high on {r['volume'] / r['vol_avg50']:.1f}x normal volume.")
-    if crossed_up(r["chandelier"], r["close"], p["chandelier"], p["close"]):
-        add("chandelier_exit", "bearish", "Trailing stop broken",
-            f"Closed at {r['close']:.2f}, below the trailing stop ({r['chandelier']:.2f}, "
-            "3 ATRs under the 22-day high).")
     if not _nan(r["day_change"]) and abs(r["day_change"]) >= 0.05:
         direction = "bullish" if r["day_change"] > 0 else "bearish"
         add("big_move", direction, f"Moved {_pct(r['day_change'])} today",
